@@ -1,0 +1,49 @@
+[project]
+name = 'jpl.labcas.validation'
+dynamic = ['version']
+requires-python = '>=3.12'
+dependencies = [
+    'pydicom ~= 3.0.1',
+    'pytesseract ~= 0.3.13',
+    'pylibjpeg[all] ~= 2.1.0',
+    'pillow ~= 12.0.0'
+]
+authors = [
+    {name = 'Sean Kelly', email='kelly@seankelly.biz'}
+]
+description = 'DICOM validation for the Laboratory Catalog and Archive Service of the Early Detection Research Network'
+readme = 'README.md'
+keywords = ['data', 'catalog', 'archive', 'edrn', 'labcas', 'cancer', 'nih', 'nci', 'jpl', 'nasa', 'dicom', 'validation']
+classifiers = [
+    'Development Status :: 2 - Pre-Alpha',
+    'Intended Audience :: Healthcare Industry',
+    'Intended Audience :: Science/Research',
+    'License :: OSI Approved :: Apache Software License',
+    'Natural Language :: English',
+    'Operating System :: OS Independent',
+    'Programming Language :: Python :: 3',
+]
+license = {file = 'LICENSE.md'}
+
+
+[project.urls]
+Homepage = 'https://github.com/EDRN/jpl.labcas.validation'
+Issues = 'https://github.com/EDRN/jpl.labcas.validation/issues'
+
+
+[project.scripts]
+validate-dicom-files = 'jpl.labcas.validation.main:main'
+
+
+[tool.hatch.version]
+path = 'src/jpl/labcas/validation/VERSION.txt'
+pattern = '(?P<version>.+)'
+
+
+[tool.hatch.build.targets.wheel]
+packages = ['src/jpl']
+
+
+[build-system]
+requires = ['hatchling']
+build-backend = 'hatchling.build'
