@@ -11,6 +11,7 @@ repos:
               - '--disable-plugin'
               - 'AbsolutePathDetectorExperimental'
               - --exclude-files '\.secrets..*'
+              - --exclude-files '\.pre-commit-config\.yaml'
               - --exclude-files '\.git.*'
               - --exclude-files '\.mypy_cache'
               - --exclude-files '\.pytest_cache'
@@ -24,5 +25,5 @@ repos:
 
 # Equivalent command-line invocation for generating the baseline:
 #
-# detect-secrets scan --disable-plugin AbsolutePathDetectorExperimental --exclude-files '\.secrets..*' --exclude-files '\.git.*' --exclude-files '\.mypy_cache' --exclude-files '\.pytest_cache' --exclude-files '\.tox' --exclude-files '\.venv' --exclude-files 'venv' --exclude-files 'dists' --exclude-files '__pycache__' --exclude-files '.*\.egg-info' > .secrets.baseline
+# detect-secrets scan --disable-plugin AbsolutePathDetectorExperimental --exclude-files '\.secrets..*' --exclude-files '\.pre-commit-config\.yaml' --exclude-files '\.git.*' --exclude-files '\.mypy_cache' --exclude-files '\.pytest_cache' --exclude-files '\.tox' --exclude-files '\.venv' --exclude-files 'venv' --exclude-files 'dists' --exclude-files '__pycache__' --exclude-files '.*\.egg-info' > .secrets.baseline
 # detect-secrets audit .secrets.baseline
