@@ -23,7 +23,7 @@ class SeriesDescriptionValidator(RegexValidator):
 
     description = 'SeriesDescription must not be numeric-only'
     tag = pydicom.tag.Tag((0x0008, 0x103E))
-    regex = re.compile(r'\D')  # \D means "non-digit" which is what @hoodriverheather wants for "not numeric-only"
+    regex = re.compile(r'.*\D.*')
     
 
 class StudyInstanceUIDValidator(DICOMUIDValidator):
