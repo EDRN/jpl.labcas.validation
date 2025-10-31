@@ -233,10 +233,12 @@ class Report:
                     io.write(f'### 🗓️ Event ID: `{event_id}`\n\n')
                     io.write(f'Files in this event: {len(file_names)}.\n\n')
 
+                    displayed_one_file = False
                     for file_name, findings in file_names.items():
                         have_scored_findings = any(f.score >= self.score for f in findings)                        
                         if have_scored_findings:
                             io.write(f'\n#### 📄 File Name: `{file_name}`\n\n')
+                            displayed_one_file = True
                             kinds = sorted(list(set([f.kind() for f in findings])))
                             io.write('| Score | Kind | Details |\n')
                             io.write('|------:|:----:|:--------|\n')
@@ -251,7 +253,7 @@ class Report:
                                         io.write(f'| {score:.2f} | {kind} | {details} |\n')
                                 else:
                                     io.write(f'| | {kind} | No findings found at or above the threshold of {self.score:.2f} for {kind} |\n')
-                    else:
-                        io.write(f'No findings for any file at or above the threshold of {self.score:.2f}.\n')
+                    if not displayed_one_file:
+                        io.write(f'No findings for any file at or above the threshold of {self.score:.2f} in this event.\n')
                     io.write('\n')
                 io.write('\n')
