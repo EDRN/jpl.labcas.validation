@@ -10,11 +10,11 @@ from pydicom import datadict
 from typing import Iterable
 import pydicom, logging, argparse, re, pytesseract, math
 
+# Avoid problematic DICOM files so we can still grab as many of the tags and values as we can
+pydicom.config.convert_wrong_length_to_UN = True
 
 _logger = logging.getLogger(__name__)
 
-# The fields suggested by ChatGPT, plus:
-# Any field named labcas.dicom:*
 
 class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
     '''A simple scoring PHI/PII recognizer.'''
@@ -47,6 +47,7 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         (0x0010, 0x1040),  # PatientAddress
         (0x0010, 0x0035),  # PatientBirthName
         (0x0010, 0x1060),  # PatientMotherBirthName
+        (0x0018, 0x1000),  # DeviceSerialNumber
     }
 
     # Text but low-risk and contextual, not identifiers; we don't auto-flag these
@@ -57,7 +58,6 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         (0x0008, 0x103E),  # SeriesDescription
         (0x0008, 0x2111),  # DerivationDescription
         (0x0020, 0x4000),  # ImageComments
-        (0x0018, 0x1000),  # DeviceSerialNumber
     }
 
     # Common regexes for de-identified text values
@@ -81,7 +81,7 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
     # Regexes by name → compiled pattern
     _patterns = {
         'EMAIL': re.compile(r'[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}', re.IGNORECASE),
-        'PHONE': re.compile(r'\b(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})\b'),
+        'PHONE': re.compile(r'\b(?:\+\d{1,3}[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})\b'),
         'SSN': re.compile(r'\b\d{3}[- ]?\d{2}[- ]?\d{4}\b'),
         'MRN_like': re.compile(r'\b(?:MRN|Med(?:ical)?\s*Record)\s*[:#]?\s*[A-Z0-9\-]{3,}\b', re.IGNORECASE),
         'DOB_like': re.compile(r'(?:DOB|Birth\s*Date)\s*[:#]?\s*(?:\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})', re.IGNORECASE),

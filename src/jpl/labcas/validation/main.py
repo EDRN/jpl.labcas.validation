@@ -11,7 +11,7 @@ from . import VERSION
 from ._argparse import add_standard_argparse_options
 from ._classes import Finding, Report, ErrorFinding
 from ._functions import check_directory
-from .const import PHI_PII_THRESHOLD, DEFAULT_PROTOCOL
+from .const import PHI_PII_THRESHOLD, DEFAULT_PROTOCOL, IGNORED_FILES
 from .phi_pii_recognizers import PHI_PII_RECOGNIZERS, DEFAULT_PHI_PII_RECOGNIZER
 from .validators import VALIDATORS
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -74,6 +74,7 @@ def _iter_paths(root: str):
     '''
     for r, _, files in os.walk(root):
         for f in files:
+            if f in IGNORED_FILES: continue
             yield os.path.join(r, f)
 
 
@@ -132,7 +133,7 @@ def main():
         help='PHI/PII recognizer to use (see recognizer descriptions below)'
     )
     parser.add_argument(
-        '-o', '--output', default='report.md', help='Output file for the report, defaults to %(default)s'
+        '-o', '--output', default='report.csv', help='Output file for the report, defaults to %(default)s'
     )
     parser.add_argument('directory', help='Directory to scan for DICOM files')
     args = parser.parse_args()

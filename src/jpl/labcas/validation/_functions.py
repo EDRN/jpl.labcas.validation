@@ -3,6 +3,7 @@
 '''🛂 EDRN DICOM Validation: functions.'''
 
 from .errors import DirectoryError
+from .const import IGNORED_FILES
 import re, os, pydicom
 
 _event_id_re = re.compile(r'^\d{7}$')
@@ -32,12 +33,14 @@ def check_directory(target: str):
     if not sites:
         raise DirectoryError(f'🫙 Target directory {target} is empty')
     for site in sites:
+        if site in IGNORED_FILES: continue
         if not os.path.isdir(os.path.join(target, site)):
             raise DirectoryError(f'📄 Site {site} in target directory {target} is not a directory')
         events = os.listdir(os.path.join(target, site))
         if not events:
             raise DirectoryError(f'🫙 Site {site} in target directory {target} is empty')
         for event in events:
+            if event in IGNORED_FILES: continue
             if not os.path.isdir(os.path.join(target, site, event)):
                 raise DirectoryError(f'📄 Event {event} in site {site} in target directory {target} is not a directory')
             if not _event_id_re.match(event):
@@ -83,3 +86,9 @@ def textify_dicom_value(value: any) -> list[str]:
             result.append('')
     
     return result
+
+
+def modality(ds: pydicom.Dataset) -> str:
+    '''Determine the modality of the given DICOM dataset.'''
+    modality = ds.Modality if ds.Modality is not None and ds.Modality.strip() != '' else 'UNKNOWN'
+    return modality
