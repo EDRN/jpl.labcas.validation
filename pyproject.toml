@@ -1,12 +1,13 @@
 [project]
 name = 'jpl.labcas.validation'
 dynamic = ['version']
-requires-python = '>=3.12'
+requires-python = '>=3.11'
 dependencies = [
     'pydicom ~= 3.0.1',
     'pytesseract ~= 0.3.13',
     'pylibjpeg[all] ~= 2.1.0',
-    'pillow ~= 12.0.0'
+    'pillow ~= 12.0.0',
+    'pysolr ~= 3.10.0',
 ]
 authors = [
     {name = 'Sean Kelly', email='kelly@seankelly.biz'}
