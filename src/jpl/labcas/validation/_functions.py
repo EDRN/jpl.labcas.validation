@@ -34,17 +34,22 @@ def check_directory(target: str):
         raise DirectoryError(f'🫙 Target directory {target} is empty')
     for site in sites:
         if site in IGNORED_FILES: continue
-        if not os.path.isdir(os.path.join(target, site)):
-            raise DirectoryError(f'📄 Site {site} in target directory {target} is not a directory')
-        events = os.listdir(os.path.join(target, site))
-        if not events:
-            raise DirectoryError(f'🫙 Site {site} in target directory {target} is empty')
-        for event in events:
-            if event in IGNORED_FILES: continue
-            if not os.path.isdir(os.path.join(target, site, event)):
-                raise DirectoryError(f'📄 Event {event} in site {site} in target directory {target} is not a directory')
-            if not _event_id_re.match(event):
-                raise DirectoryError(f'❌ Unexpected format for event folder "{event}" in {target}/{site}')
+
+        # Disabling this check as there are LOTS of things `like Prostate_MRI/Prostate_MRI.cfg` on
+        # the LabCAS disk that it's not worth the headache
+        # if not os.path.isdir(os.path.join(target, site)):
+        #     raise DirectoryError(f'📄 Site {site} in target directory {target} is not a directory')
+        #
+        # events = os.listdir(os.path.join(target, site))
+        # if not events:
+        #     raise DirectoryError(f'🫙 Site {site} in target directory {target} is empty')
+        #
+        # for event in events:
+        #     if event in IGNORED_FILES: continue
+        #     if not os.path.isdir(os.path.join(target, site, event)):
+        #         raise DirectoryError(f'📄 Event {event} in site {site} in target directory {target} is not a directory')
+        #     if not _event_id_re.match(event):
+        #         raise DirectoryError(f'❌ Unexpected format for event folder "{event}" in {target}/{site}')
     
     # Now ensure there's at least one DICOM file somewhere under the target directory
     for r, _, files in os.walk(target):
