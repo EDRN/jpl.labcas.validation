@@ -11,12 +11,13 @@ from . import VERSION
 from ._argparse import add_standard_argparse_options
 from ._classes import Finding, Report, ErrorFinding
 from ._functions import check_directory
-from .const import PHI_PII_THRESHOLD, DEFAULT_PROTOCOL, IGNORED_FILES
+from .const import PHI_PII_THRESHOLD, IGNORED_FILES
 from .phi_pii_recognizers import PHI_PII_RECOGNIZERS, DEFAULT_PHI_PII_RECOGNIZER
 from .validators import VALIDATORS
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count
-import argparse, sys, logging, os, pydicom
+from typing import Iterable
+import argparse, sys, logging, os, pydicom, pysolr, os.path
 
 
 def _score_type(value: str) -> float:
@@ -67,7 +68,7 @@ def _scan_one(path: str) -> list[Finding]:
         return []
 
 
-def _iter_paths(root: str):
+def iterate_paths(root: str) -> Iterable[str]:
     '''Iterate over the paths in the given directory.
 
     We can't assume DICOM files end in .dcm; a lot of them come in without extensions, so process every file.
@@ -78,8 +79,13 @@ def _iter_paths(root: str):
             yield os.path.join(r, f)
 
 
-def validate_pool(directory: str, recognizer_name: str, args: argparse.Namespace, concurrency: int) -> list[Finding]:
-    '''Validate the DICOM files in the given directory using a pool of workers.'''
+def validate_pool(
+    directory: str, recognizer_name: str, args: argparse.Namespace, concurrency: int, file_generator) -> list[Finding]:
+    '''Validate the DICOM files in the given directory using a pool of workers.
+    
+    The `file_generator` function is a callable that returns an iterable of paths to the
+    DICOM files in the given directory.
+    '''
     args_dict = vars(args)
     results: list[Finding] = []
     with ProcessPoolExecutor(
@@ -87,7 +93,7 @@ def validate_pool(directory: str, recognizer_name: str, args: argparse.Namespace
         initializer=_init_worker,
         initargs=(recognizer_name, args_dict),
     ) as executor:
-        futures = (executor.submit(_scan_one, p) for p in _iter_paths(directory))
+        futures = (executor.submit(_scan_one, p) for p in file_generator(directory))
         try:
             for future in as_completed(futures, timeout=None):
                 res = future.result()
@@ -98,13 +104,64 @@ def validate_pool(directory: str, recognizer_name: str, args: argparse.Namespace
     return results
 
 
-def validate_single(directory: str, recognizer_name: str, args: argparse.Namespace) -> list[Finding]:
-    '''Validate the DICOM files in the given directory using in the current process.'''
+def validate_single(directory: str, recognizer_name: str, args: argparse.Namespace, file_generator) -> list[Finding]:
+    '''Validate the DICOM files in the given directory using in the current process.
+    
+    The `file_generator` function is a callable that returns an iterable of paths to the DICOM
+    files in the given directory.
+    '''
     _init_worker(recognizer_name, vars(args))
     results: list[Finding] = []
-    for path in _iter_paths(directory):
+    for path in file_generator(directory):
         results.extend(_scan_one(path))
     return results
+
+
+def _create_solr_paths_iterator(solr_url: str, directory: str, batch_size: int = 100):
+    '''Create a function that iterates over the paths in the given directory using the given Solr URL.'''
+
+    _logger.info('🔍 Creating Solr paths iterator for %s with batch size %d', directory, batch_size)
+
+    def _collect_existing_paths(solr: pysolr.Solr, ids_to_paths: dict[str, str]) -> set[str]:
+        if not ids_to_paths:
+            return set()
+        # Build a single query that checks all IDs in this batch
+        quoted_ids = ' OR '.join(f'"{file_id}"' for file_id in ids_to_paths.keys())
+        query = f'id:({quoted_ids})'
+        results = solr.search(query, rows=len(ids_to_paths), **{'fl': 'id'})
+        existing_paths: set[str] = set()
+        for doc in results.docs:
+            doc_id = doc.get('id')
+            if isinstance(doc_id, list):
+                doc_id = doc_id[0] if doc_id else None
+            if doc_id and doc_id in ids_to_paths:
+                existing_paths.add(ids_to_paths[doc_id])
+        return existing_paths
+
+    collection_name = os.path.basename(directory)
+    solr = pysolr.Solr(solr_url, verify=False)
+    paths: set[str] = set()
+    batch: dict[str, str] = {}
+
+    # First pass to populate `paths` with files both in the filesystem and in Solr
+    for path in iterate_paths(directory):
+        try:
+            collection_index = path.index(collection_name)
+        except ValueError:
+            _logger.debug('⚠️ Skipping %s because it does not contain collection name %s', path, collection_name)
+            continue
+        file_id = path[collection_index:]
+        batch[file_id] = path
+        if len(batch) >= batch_size:
+            paths.update(_collect_existing_paths(solr, batch))
+            batch.clear()
+
+    # Pick up any remaining files in the last batch
+    if batch: paths.update(_collect_existing_paths(solr, batch))
+
+    def _iterate(_: str) -> Iterable[str]:
+        return paths
+    return _iterate
 
 
 def main():
@@ -120,7 +177,6 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     add_standard_argparse_options(parser)
-    parser.add_argument('-p', '--protocol', type=int, default=DEFAULT_PROTOCOL, help='Protocol ID, defaults %(default)d')
     parser.add_argument(
         '-s', '--score', type=_score_type, default=PHI_PII_THRESHOLD,
         help='Maximum PHI/PII score between 0.0 and 1.0, defaults to %(default)f; not all recognizers use a score, so this is optional'
@@ -135,14 +191,29 @@ def main():
     parser.add_argument(
         '-o', '--output', default='report.csv', help='Output file for the report, defaults to %(default)s'
     )
+    parser.add_argument(
+        '-u', '--url', help='URL to LabCAS Solr (optional; if not provided, files will not be confirmed published)'
+    )
     parser.add_argument('directory', help='Directory to scan for DICOM files')
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel, format='%(levelname)s %(message)s')
     check_directory(args.directory)
-    if args.concurrency == 1:
-        findings = validate_single(args.directory, args.recognizer, args)
+    if args.url:
+        solr_url = args.url.strip()
+        solr_url = solr_url if solr_url.endswith('/') else solr_url + '/'
+        if 'files' not in solr_url:
+            solr_url += 'files/'
+        _logger.info('🔍 Solr URL is %s', solr_url)
+        file_generator = _create_solr_paths_iterator(solr_url, args.directory)
     else:
-        findings = validate_pool(args.directory, args.recognizer, args, args.concurrency)
+        _logger.info('🔍 Not using Solr (no URL provided)')
+        solr_url = None
+        file_generator = iterate_paths
+
+    if args.concurrency == 1:
+        findings = validate_single(args.directory, args.recognizer, args, file_generator)
+    else:
+        findings = validate_pool(args.directory, args.recognizer, args, args.concurrency, file_generator)
     _logger.info('🔍 Found %d findings', len(findings))
     report = Report(findings, args.output, args.score)
     report.generate_report()

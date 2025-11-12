@@ -113,7 +113,6 @@ the `<directory>` should eventually contain the following directory hierarchy:
 
 Use `--help` to get more details, but summarizing:
 
-- `-p, --protocol <ID>`: Protocol ID (default: 430 for Prostate_MRI)
 - `-s, --score <value>`: Maximum PHI/PII score threshold (0.0-1.0, default: 0.8)
 - `-c, --concurrency <num>`: Number of concurrent processes (default: CPU count)
 - `-r, --recognizer <name>`: PHI/PII recognizer to use:
