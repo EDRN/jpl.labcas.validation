@@ -2,7 +2,7 @@
 
 '''🛂 EDRN DICOM Validation: simple scoring PHI/PII recognizer.'''
 
-from .._classes import PHI_PII_Recognizer, Finding, HeaderFinding, ImageFinding
+from .._classes import PHI_PII_Recognizer, Finding, HeaderFinding, ImageFinding, ErrorFinding
 from ..const import IMAGE_SCORE
 from collections import Counter
 from PIL import Image
@@ -129,8 +129,12 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
     def _extract_frames(self, ds: pydicom.Dataset, max_frames: int = 4) -> list:
         '''Extract up to `max_frames` frames from the given DICOM dataset.'''
         frames = []
+        # The `pixel_array` is a `@property` which even if we just do `hasattr` can cause
+        # a whole bunch of things to happen—and raise exceptions!
         if not hasattr(ds, 'pixel_array'): return frames
+
         try:
+            # And then grab it:
             arr = ds.pixel_array  # This can raise a whole heapload of exceptions, so we just catch Exception below
 
             # Multi-frame DICOM have `ndim` (number dimensions)
@@ -197,7 +201,13 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
     def _recognize_pixels(self, ds: pydicom.Dataset) -> list[Finding]:
         '''Recognize PHI/PII in the pixels of the given DICOM dataset.'''
         findings: list[Finding] = []
-        frames = self._extract_frames(ds)
+        try:
+            frames = self._extract_frames(ds)
+        except Exception:
+            _logger.exception('💥 Unexpected exception extracting frames from %s', ds.filename)
+            findings.append(ErrorFinding(
+                file=ds.filename, value='💥 Unexpected exception extracting pixel frames', error_message=str(ex)
+            ))
         if not frames: return findings
         for idx, frame in enumerate(frames):
             text, boxes = self._recognize_characters(frame)        
