@@ -159,6 +159,7 @@ def _create_solr_paths_iterator(solr_url: str, directory: str, batch_size: int =
     # Pick up any remaining files in the last batch
     if batch: paths.update(_collect_existing_paths(solr, batch))
 
+    _logger.info('🔍 Found %d paths in both the filesystem at %s and in Solr %s', len(paths), directory, solr_url)
     def _iterate(_: str) -> Iterable[str]:
         return paths
     return _iterate

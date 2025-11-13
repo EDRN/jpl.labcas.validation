@@ -95,5 +95,8 @@ def textify_dicom_value(value: any) -> list[str]:
 
 def modality(ds: pydicom.Dataset) -> str:
     '''Determine the modality of the given DICOM dataset.'''
-    modality = ds.Modality if ds.Modality is not None and ds.Modality.strip() != '' else 'UNKNOWN'
+    if hasattr(ds, 'Modality'):
+        modality = ds.Modality if ds.Modality is not None and ds.Modality.strip() != '' else 'UNKNOWN'
+    else:
+        modality = 'UNKNOWN'
     return modality
