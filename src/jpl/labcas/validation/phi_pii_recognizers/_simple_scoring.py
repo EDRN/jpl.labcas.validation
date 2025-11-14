@@ -203,7 +203,7 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         findings: list[Finding] = []
         try:
             frames = self._extract_frames(ds)
-        except Exception:
+        except Exception as ex:
             _logger.exception('💥 Unexpected exception extracting frames from %s', ds.filename)
             findings.append(ErrorFinding(
                 file=ds.filename, value='💥 Unexpected exception extracting pixel frames', error_message=str(ex)
