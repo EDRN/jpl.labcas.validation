@@ -200,7 +200,7 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
 
     def _recognize_pixels(self, ds: pydicom.Dataset) -> list[Finding]:
         '''Recognize PHI/PII in the pixels of the given DICOM dataset.'''
-        findings: list[Finding] = []
+        findings, frames = [], []
         try:
             frames = self._extract_frames(ds)
         except Exception as ex:
