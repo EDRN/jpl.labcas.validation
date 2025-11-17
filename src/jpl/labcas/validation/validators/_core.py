@@ -276,19 +276,26 @@ class ImageOrientationPatientValidator(Validator):
         findings: list[ValidationFinding] = []
         elem = ds.get_item(self.tag)
         if elem is not None:
-            count = 0
-            for v in elem.value:
-                try:
-                    float(v)
-                    count += 1
-                except ValueError:
-                    break
-            if count != 6:
+            if elem.value is None:
                 finding = ValidationFinding(
-                    file=ds.filename, value=str(elem.value), tag=self.tag,
-                    description='ImageOrientationPatient must be a 6 numeric values'
+                    file=ds.filename, value='ImageOrientationPatient tag value has null values', tag=self.tag,
+                    description='ImageOrientationPatient tag value has null values'
                 )
                 findings.append(finding)
+            else:
+                count = 0
+                for v in elem.value:
+                    try:
+                        float(v)
+                        count += 1
+                    except ValueError:
+                        break
+                if count != 6:
+                    finding = ValidationFinding(
+                        file=ds.filename, value=str(elem.value), tag=self.tag,
+                        description='ImageOrientationPatient must be a 6 numeric values'
+                    )
+                    findings.append(finding)
         else:
             findings.append(ValidationFinding(
                 file=ds.filename, value='tag missing', tag=self.tag,
