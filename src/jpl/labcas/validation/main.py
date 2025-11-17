@@ -73,7 +73,7 @@ def iterate_paths(root: str) -> Iterable[str]:
 
     We can't assume DICOM files end in .dcm; a lot of them come in without extensions, so process every file.
     '''
-    for r, _, files in os.walk(root):
+    for r, _, files in os.walk(root, followlinks=True):
         for f in files:
             if f in IGNORED_FILES: continue
             yield os.path.join(r, f)
