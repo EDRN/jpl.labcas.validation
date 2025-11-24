@@ -126,14 +126,14 @@ def _create_solr_paths_iterator(solr_url: str, directory: str, batch_size: int =
         # Build a single query that checks all IDs in this batch
         quoted_ids = ' OR '.join(f'"{file_id}"' for file_id in ids_to_paths.keys())
         query = f'id:({quoted_ids})'
-        results = solr.search(query, rows=len(ids_to_paths), fl=['id', 'eventID'])
+        results = solr.search(query, rows=len(ids_to_paths), fl=['id', 'eventID', 'BlindedSiteID'])
         existing_paths: set[PotentialFile] = set()
         for doc in results.docs:
-            doc_id, event_id = doc.get('id'), doc.get('eventID', ['«unknown event»'])[0]
+            doc_id, event_id, site_id = doc.get('id'), doc.get('eventID', ['«unknown event»'])[0], doc.get('BlindedSiteID', ['«unknown site»'])[0]
             if isinstance(doc_id, list):
                 doc_id = doc_id[0] if doc_id else None
             if doc_id and doc_id in ids_to_paths:
-                existing_paths.add(PotentialFile(ids_to_paths[doc_id], event_id=event_id))
+                existing_paths.add(PotentialFile(ids_to_paths[doc_id], site_id=site_id, event_id=event_id))
         return existing_paths
 
     collection_name = os.path.basename(directory)
@@ -189,7 +189,7 @@ def main():
         help='PHI/PII recognizer to use (see recognizer descriptions below)'
     )
     parser.add_argument(
-        '-o', '--output', default='report.csv', help='Output file for the report, defaults to %(default)s'
+        '-o', '--output', default='report', help='Prefix for output files for the report, defaults to %(default)s'
     )
     parser.add_argument(
         '-u', '--url', help='URL to LabCAS Solr (optional; if not provided, files will not be confirmed published)'
@@ -215,7 +215,7 @@ def main():
     else:
         findings = validate_pool(args.directory, args.recognizer, args, args.concurrency, file_generator)
     _logger.info('🔍 Found %d findings', len(findings))
-    report = Report(findings, args.output, args.score)
+    report = Report(findings, args.score)
     report.generate_report()
     sys.exit(0)
 
