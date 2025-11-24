@@ -2,7 +2,7 @@
 
 '''🛂 EDRN DICOM Validation: experimental PHI/PII recognizers.'''
 
-from .._classes import PHI_PII_Recognizer, HeaderFinding, Finding
+from .._classes import PHI_PII_Recognizer, HeaderFinding, Finding, PotentialFile
 import pydicom, logging
 
 _logger = logging.getLogger(__name__)
@@ -13,8 +13,8 @@ class Accepting_PHI_PII_Recognizer(PHI_PII_Recognizer):
     
     description = 'Always accepts: never finds any PHI or PII in a DICOM dataset, for testing purposes'
     
-    def recognize(self, ds: pydicom.Dataset) -> list[Finding]:
-        _logger.debug('👍 Accepting recognizer giving no findings for %s for testing purposes', ds.filename)
+    def recognize(self, potential_file: PotentialFile) -> list[Finding]:
+        _logger.debug('👍 Accepting recognizer giving no findings for %s for testing purposes', potential_file)
         return []
 
 
@@ -23,11 +23,11 @@ class Rejecting_PHI_PII_Recognizer(PHI_PII_Recognizer):
 
     description = 'Always rejects: finds PHI or PII in a DICOM dataset no matter what, for testing purposes'
 
-    def recognize(self, ds: pydicom.Dataset) -> list[Finding]:
-        _logger.debug('👎 Rejecting recognizer "finding" PHI/PII in %s for testing purposes', ds.filename)
+    def recognize(self, potential_file: PotentialFile) -> list[Finding]:
+        _logger.debug('👎 Rejecting recognizer "finding" PHI/PII in %s for testing purposes', potential_file)
         return [
             HeaderFinding(
-                file=ds.filename,
+                file=potential_file,
                 value='Jane Doe', score=1.0, tag=pydicom.tag.Tag((0x0008, 0x0005)),
                 description='PHI/PII artificially found for testing purposes, name of patient'
             )

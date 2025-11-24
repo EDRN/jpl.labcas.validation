@@ -3,26 +3,84 @@
 '''🛂 EDRN DICOM Validation: classes.'''
 
 from __future__ import annotations
+from functools import lru_cache
 from dataclasses import dataclass
 from typing import ClassVar
 from abc import ABC, abstractmethod
 from collections import defaultdict
-import pydicom, argparse, logging, re, csv
+import pydicom, argparse, logging, re, csv, os.path
 from pydicom.tag import Tag
 from pydicom import datadict
 
 _logger = logging.getLogger(__name__)
 
+@dataclass
+class PotentialFile:
+    '''A file that we will scan for PHI/PII and check for compliance with EDRN validation requirements.'''
+    path: str           # Relative path of the file
+    site_id: str        # Blinded site ID
+    event_id: str       # Event ID
+    file_name: str      # File name
+
+    # Regex for parsing organization parts from file paths
+    _organization_re = re.compile(r'([^/]+)/(\d{7})/(.+)$')  # blah/blah/Images_site_XYX/1234567/f1/f2/…/file.dcm
+
+    def __init__(self, path: str, site_id: str = None, event_id: str = None):
+        '''Initialize the potential file with the given file path and optional site and event IDs.'''
+        self.path = path
+
+        search_result = self._organization_re.search(path)
+        if search_result:
+            self.site_id, self.event_id, self.file_name = search_result.groups()
+        else:
+            self.site_id, self.event_id, self.file_name = '«unknown site»', '«unknown event»', os.path.basename(path)
+
+        if site_id: self.site_id = site_id
+        if event_id: self.event_id = event_id
+
+    @lru_cache
+    def _read_dicom_file(self, stop_before_pixels: bool = False, force: bool = False) -> pydicom.Dataset:
+        '''Read the DICOM file and return a dataset.'''
+        return pydicom.dcmread(self.path, stop_before_pixels=stop_before_pixels, force=force)
+
+    def dcmread(self, stop_before_pixels: bool = False, force: bool = False, cache: bool = True) -> pydicom.Dataset:
+        '''Read the DICOM file and return a dataset.'''
+
+        if cache:
+            return self._read_dicom_file(stop_before_pixels, force)
+        else:
+            return pydicom.dcmread(self.path, stop_before_pixels=stop_before_pixels, force=force)
+
+    def __repr__(self) -> str:
+        '''Return a convenient representation of the potential file.'''
+        return (
+            f'{self.__class__.__name__}(path={self.path}, site_id={self.site_id}, event_id={self.event_id}, '
+            f'file_name={self.file_name})'
+        )
+
+    def __str__(self) -> str:
+        '''Return a string representation of the potential file.'''
+        return self.path
+
+    def __hash__(self) -> int:
+        '''Return a hash of the potential file.'''
+        return hash(self.path)
+
+    def __eq__(self, other: PotentialFile) -> bool:
+        '''Return True if the two potential files are equal.'''
+        return self.path == other.path
+
+    def __lt__(self, other: PotentialFile) -> bool:
+        '''Return True if the current potential file is less than the other potential file.'''
+        return self.path < other.path
+        
 
 @dataclass
 class Finding:
     '''A finding in a DICOM file.'''
-    file: str           # Relative path of the file containing the finding
-    value: str          # Text value of the finding
-    score: float = 1.0  # Severity, where 0.0 is nothing and 1.0 is completely severe
-
-    # Regular expression for parsing organization parts from file paths
-    _organization_re = re.compile(r'([^/]+)/(\d{7})/(.+)$')
+    file: PotentialFile           # The potential file that contains the finding
+    value: str                    # Text value of the finding
+    score: float = 1.0            # Severity, where 0.0 is nothing and 1.0 is completely severe
 
     @abstractmethod
     def kind(self) -> str:
@@ -37,12 +95,7 @@ class Finding:
     def organization_parts(self) -> tuple[str, str, str]:
         '''Return the blinded site ID, event ID, and file name of this finding as a tuple of 3 strings.
         '''
-        match = self._organization_re.search(self.file)
-        if match:
-            return match.groups()
-        else:
-            # Fallback if no match found
-            return ('«unknown site»', '«unknown event»', self.file.split('/')[-1] if '/' in self.file else self.file)
+        return self.file.site_id, self.file.event_id, self.file.path
 
 
 @dataclass
@@ -135,7 +188,7 @@ class PHI_PII_Recognizer(ABC):
             raise TypeError(f'{cls.__name__} must define a «description» class attribute')
 
     @abstractmethod
-    def recognize(self, ds: pydicom.Dataset) -> list[Finding]:
+    def recognize(self, potential_file: PotentialFile) -> list[Finding]:
         '''Recognize PHI/PII in the given DICOM dataset and return a list of findings.'''
         raise NotImplementedError(f'{self.__class__.__name__} must implement the «recognize» method')
 
@@ -169,7 +222,7 @@ class Validator(ABC):
                 raise TypeError(f'{cls.__name__} must define a «{attr}» class attribute')
 
     @abstractmethod
-    def validate(self, ds: pydicom.Dataset) -> list[ValidationFinding]:
+    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
         '''Validate the given DICOM dataset and return a list of findings.'''
         raise NotImplementedError(f'{self.__class__.__name__} must implement the «validate» method')
 

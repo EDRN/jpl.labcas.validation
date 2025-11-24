@@ -5,7 +5,7 @@
 These validators are mostly for testing and development purposes.
 '''
 
-from .._classes import Validator, ValidationFinding
+from .._classes import Validator, ValidationFinding, PotentialFile
 import pydicom
 
 
@@ -15,9 +15,11 @@ class ExperimentalModalityValidator(Validator):
     description = 'Experimental Modality (always fails) for tag (0008,0060)'
     tag = pydicom.tag.Tag((0x0008, 0x0060))
 
-    def validate(self, ds: pydicom.Dataset) -> list[ValidationFinding]:
+    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
         return [ValidationFinding(
-            file=ds.filename, value=ds.Modality, tag=self.tag,description='Modality is always UNACCEPTABLE for testing'
+            file=potential_file,
+            value=potential_file.dcmread(stop_before_pixels=True, force=False).Modality,
+            tag=self.tag,description='Modality is always UNACCEPTABLE for testing'
         )]
 
 
@@ -27,6 +29,6 @@ class ExperimentalManufacturerValidator(Validator):
     description = 'Experimental Manufacturer (always passes) for tag (0008,0070)'
     tag = pydicom.tag.Tag((0x0008, 0x0070))
 
-    def validate(self, ds: pydicom.Dataset) -> list[ValidationFinding]:
+    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
         return []  # No findings means we're happy
 

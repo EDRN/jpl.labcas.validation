@@ -7,7 +7,7 @@ The validators in this module are derived from the "CORE" tab of @hoodriverheath
 https://docs.google.com/spreadsheets/d/1Q56vKzK0nB4UAkfLJnBOy6C-7wtHccvZkWYGQHTMpBw/edit?gid=1779958583#gid=1779958583
 '''
 
-from .._classes import Validator, ValidationFinding
+from .._classes import Validator, ValidationFinding, PotentialFile
 from .._functions import textify_dicom_value
 from ._base import RegexValidator, DICOMUIDValidator, YMDValidator
 import pydicom, re, logging
@@ -214,8 +214,9 @@ class WindowCenterValidator(RegexValidator):
     tag = pydicom.tag.Tag((0x0028, 0x1050))
     regex = re.compile(r'^-?(\d+\.\d*|\d*\.\d+|\d+)(\\-?(\d+\.\d*|\d*\.\d+|\d+))*$')
 
-    def validate(self, ds: pydicom.Dataset) -> list[ValidationFinding]:
+    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
         '''Validate the given DICOM dataset and return a list of findings.'''
+        ds = potential_file.dcmread(stop_before_pixels=True, force=False)
         findings: list[ValidationFinding] = []
 
         # Validate the WindowCenter tag only if the PhotometricInterpretation is MONOCHROME1 or MONOCHROME2
@@ -223,7 +224,7 @@ class WindowCenterValidator(RegexValidator):
         if photometric_interpretation is not None:
             value = textify_dicom_value(photometric_interpretation.value)
             if any(v.strip() in ('MONOCHROME1', 'MONOCHROME2') for v in value):
-                findings.extend(super().validate(ds))
+                findings.extend(super().validate(potential_file))
         return findings
 
 
@@ -236,8 +237,9 @@ class WindowWidthValidator(RegexValidator):
     tag = pydicom.tag.Tag((0x0028, 0x1051))
     regex = re.compile(r'^-?(\d+\.\d*|\d*\.\d+|\d+)(\\-?(\d+\.\d*|\d*\.\d+|\d+))*$')
 
-    def validate(self, ds: pydicom.Dataset) -> list[ValidationFinding]:
+    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
         '''Validate the given DICOM dataset and return a list of findings.'''
+        ds = potential_file.dcmread(stop_before_pixels=True, force=False)
         findings: list[ValidationFinding] = []
 
         # Validate the WindowWidth tag only if the PhotometricInterpretation is MONOCHROME1 or MONOCHROME2
@@ -245,7 +247,7 @@ class WindowWidthValidator(RegexValidator):
         if photometric_interpretation is not None:
             value = textify_dicom_value(photometric_interpretation.value)
             if any(v.strip() in ('MONOCHROME1', 'MONOCHROME2') for v in value):
-                findings.extend(super().validate(ds))
+                findings.extend(super().validate(potential_file))
         return findings
 
 
@@ -271,14 +273,15 @@ class ImageOrientationPatientValidator(Validator):
     description = 'ImageOrientationPatient must be a 6 numeric values'
     tag = pydicom.tag.Tag((0x0020, 0x0037))
 
-    def validate(self, ds: pydicom.Dataset) -> list[ValidationFinding]:
+    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
         '''Validate the given DICOM dataset and return a list of findings.'''
         findings: list[ValidationFinding] = []
+        ds = potential_file.dcmread(stop_before_pixels=True, force=False)
         elem = ds.get_item(self.tag)
         if elem is not None:
             if elem.value is None:
                 finding = ValidationFinding(
-                    file=ds.filename, value='ImageOrientationPatient tag value has null values', tag=self.tag,
+                    file=potential_file, value='ImageOrientationPatient tag value has null values', tag=self.tag,
                     description='ImageOrientationPatient tag value has null values'
                 )
                 findings.append(finding)
@@ -292,13 +295,13 @@ class ImageOrientationPatientValidator(Validator):
                         break
                 if count != 6:
                     finding = ValidationFinding(
-                        file=ds.filename, value=str(elem.value), tag=self.tag,
+                        file=potential_file, value=str(elem.value), tag=self.tag,
                         description='ImageOrientationPatient must be a 6 numeric values'
                     )
                     findings.append(finding)
         else:
             findings.append(ValidationFinding(
-                file=ds.filename, value='tag missing', tag=self.tag,
+                file=potential_file, value='tag missing', tag=self.tag,
                 description='ImageOrientationPatient tag is missing')
             )
         return findings

@@ -2,7 +2,7 @@
 
 '''🛂 EDRN DICOM Validation: simple scoring PHI/PII recognizer.'''
 
-from .._classes import PHI_PII_Recognizer, Finding, HeaderFinding, ImageFinding, ErrorFinding
+from .._classes import PHI_PII_Recognizer, Finding, HeaderFinding, ImageFinding, ErrorFinding, PotentialFile
 from ..const import IMAGE_SCORE
 from collections import Counter
 from PIL import Image
@@ -198,15 +198,15 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
             except Exception:
                 return '', []   
 
-    def _recognize_pixels(self, ds: pydicom.Dataset) -> list[Finding]:
+    def _recognize_pixels(self, potential_file: PotentialFile) -> list[Finding]:
         '''Recognize PHI/PII in the pixels of the given DICOM dataset.'''
-        findings, frames = [], []
+        ds, findings, frames = potential_file.dcmread(stop_before_pixels=False, force=False, cache=False), [], []
         try:
             frames = self._extract_frames(ds)
         except Exception as ex:
             _logger.exception('💥 Unexpected exception extracting frames from %s', ds.filename)
             findings.append(ErrorFinding(
-                file=ds.filename, value='💥 Unexpected exception extracting pixel frames', error_message=str(ex)
+                file=potential_file, value='💥 Unexpected exception extracting pixel frames', error_message=str(ex)
             ))
         if not frames: return findings
         for idx, frame in enumerate(frames):
@@ -216,7 +216,7 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
                 for m in rx.finditer(text):
                     excerpt = text[max(0, m.start() - 24):m.end() + 24]  # Grab 24 characters of context on each side
                     finding = ImageFinding(
-                        file=ds.filename, value=self._displayable_str(excerpt), pattern=key,
+                        file=potential_file, value=self._displayable_str(excerpt), pattern=key,
                         score=IMAGE_SCORE, index=idx
                     )
                     findings.append(finding)
@@ -388,8 +388,9 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         return max(0.0, min(1.0, score))  # Clamp!
 
 
-    def _recognize_tags(self, ds: pydicom.Dataset) -> list[Finding]:
+    def _recognize_tags(self, potential_file: PotentialFile) -> list[Finding]:
         '''Recognize PHI/PII in the tags of the given DICOM dataset.'''
+        ds = potential_file.dcmread(stop_before_pixels=True, force=False, cache=False)
         # Gather all candidate strings from the dataset
         findings: list[Finding] = []
         for path, value, vr, t in self._iter_over_dicom_elements(ds):
@@ -415,7 +416,7 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
                     elif c:
                         score = self._score(t, vr, c, None)
                         finding = HeaderFinding(
-                            file=ds.filename, value=self._displayable_str(c), score=score, tag=t,
+                            file=potential_file, value=self._displayable_str(c), score=score, tag=t,
                             description=f'Strict high-risk tag "{tag_keyword}" may need closer look with score {score}'
                         )
                         findings.append(finding)
@@ -441,7 +442,7 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
                 # as a name field)
                 if allow_name_like_here and self._pn_structured.match(c):
                     finding = HeaderFinding(
-                        file=ds.filename, value=self._displayable_str(c), score=self._score(t, vr, c, 'PN_structured'), tag=t,
+                        file=potential_file, value=self._displayable_str(c), score=self._score(t, vr, c, 'PN_structured'), tag=t,
                         description=f'Structured name detection «{c}»'
                     )
                     findings.append(finding)
@@ -461,15 +462,14 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
                     # Try to match against the current pattern
                     if rx.search(c):
                         finding = HeaderFinding(
-                            file=ds.filename, value=self._displayable_str(c), score=self._score(t, vr, c, key), tag=t,
+                            file=potential_file, value=self._displayable_str(c), score=self._score(t, vr, c, key), tag=t,
                             description=f'Using pattern {key}'
                         )
                         findings.append(finding)
 
         return findings
 
-    def recognize(self, ds: pydicom.Dataset) -> list[Finding]:
-        findings = self._recognize_tags(ds) + self._recognize_pixels(ds)
+    def recognize(self, potential_file: PotentialFile) -> list[Finding]:
+        findings = self._recognize_tags(potential_file) + self._recognize_pixels(potential_file)
         return findings
-
 

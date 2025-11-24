@@ -2,7 +2,7 @@
 
 '''🛂 EDRN DICOM Validation: base validator classes.'''
 
-from .._classes import Validator, ValidationFinding
+from .._classes import Validator, ValidationFinding, PotentialFile
 from .._functions import textify_dicom_value
 import re, pydicom, logging
 from typing import ClassVar
@@ -36,20 +36,21 @@ class RegexValidator(Validator):
                 if not hasattr(cls, attr):
                     raise TypeError(f'{cls.__name__} must define a «{attr}» class attribute')
 
-    def validate(self, ds: pydicom.Dataset) -> list[ValidationFinding]:
-        '''Validate the given DICOM datasets `ds` against our regex pattern and return the findings.'''
+    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
+        '''Validate the given DICOM dataset `potential_file` against our regex pattern and return the findings.'''
+        ds = potential_file.dcmread(stop_before_pixels=True, force=False)
         findings: list[ValidationFinding] = []
         elem = ds.get_item(self.tag)
         if elem is None:
             findings.append(ValidationFinding(
-                file=ds.filename, value='tag missing', tag=self.tag,
+                file=potential_file, value='tag missing', tag=self.tag,
                 description=f'Required tag not found in DICOM dataset'
             ))
         else:
             value = textify_dicom_value(elem.value)
             if not value or not any(v.strip() for v in value):
                 findings.append(ValidationFinding(
-                    file=ds.filename, value='value missing', tag=self.tag,
+                    file=potential_file, value='value missing', tag=self.tag,
                     description=f'Tag found but missing a value in DICOM dataset'
                 ))
             else:
@@ -58,11 +59,11 @@ class RegexValidator(Validator):
                     if not v: continue
                     _logger.debug(
                         '🫆 Class %s checking value «%s» for tag %s in %s',
-                        self.__class__.__name__, v, self.tag, ds.filename
+                        self.__class__.__name__, v, self.tag, potential_file
                     )
                     if not self.regex.match(v):
                         findings.append(ValidationFinding(
-                            file=ds.filename, value=v, tag=self.tag,
+                            file=potential_file, value=v, tag=self.tag,
                             description=f'Value for tag does not match expected pattern: {self.description}'
                         ))
         return findings

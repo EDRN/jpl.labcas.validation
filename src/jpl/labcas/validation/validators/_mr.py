@@ -3,7 +3,7 @@
 '''🛂 EDRN DICOM Validation: MR validators.'''
 
 from ._base import RegexValidator, DICOMUIDValidator
-from .._classes import ValidationFinding
+from .._classes import ValidationFinding, PotentialFile
 from .._functions import modality
 import pydicom, re, os, logging
 
@@ -66,14 +66,15 @@ class SpacingBetweenSlicesValidator(RegexValidator):
             # If anything goes wrong, assume false
             return False
 
-    def validate(self, ds: pydicom.Dataset) -> list[ValidationFinding]:
+    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
         '''Validate the given DICOM dataset and return a list of findings.'''
         findings: list[ValidationFinding] = []
+        ds = potential_file.dcmread(stop_before_pixels=True, force=False)
         if modality(ds) != 'MR': return findings
 
         # Only validate SpacingBetweenSlices when there are multiple slices in the series
         if self._has_multiple_slices_in_series(ds):
-            other_findings = super().validate(ds)
+            other_findings = super().validate(potential_file)
             current_series_uid = getattr(ds, 'SeriesInstanceUID', None)
 
             # @hoodriverheather wants the description to be more precise and not just "missing tag"
@@ -94,7 +95,7 @@ class AcquisitionMatrixValidator(RegexValidator):
     tag = pydicom.tag.Tag((0x0018, 0x0080))
     regex = re.compile(r'^\[(\d+,\s*){3}\d+\]$')
 
-    def validate(self, ds: pydicom.Dataset) -> list[ValidationFinding]:
+    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
         '''Validate the given DICOM dataset and return a list of findings.'''
         findings: list[ValidationFinding] = []
         if modality(ds) != 'MR': return findings
@@ -102,5 +103,5 @@ class AcquisitionMatrixValidator(RegexValidator):
         # Only bother to validate AcquisitionMatrix if tag (0018, 1310) exists and has a value
         elem = ds.get_item((0x0018, 0x1310))
         if elem is not None and elem.value:
-            findings.extend(super().validate(ds))
+            findings.extend(super().validate(potential_file))
         return findings

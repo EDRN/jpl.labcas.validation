@@ -4,6 +4,7 @@
 
 from .errors import DirectoryError
 from .const import IGNORED_FILES
+from typing import Iterable
 import re, os, pydicom
 
 _event_id_re = re.compile(r'^\d{7}$')
@@ -54,13 +55,14 @@ def check_directory(target: str):
     # Now ensure there's at least one DICOM file somewhere under the target directory
     for r, _, files in os.walk(target):
         for f in files:
+            candidate = os.path.join(r, f)
             try:
-                pydicom.dcmread(os.path.join(r, f), stop_before_pixels=False, force=False)
+                pydicom.dcmread(candidate, stop_before_pixels=False, force=False)
                 return
             except (IOError, pydicom.errors.InvalidDicomError) as ex:
                 continue
             except Exception as ex:
-                raise DirectoryError(f'💥 Unexpected exception reading file {os.path.join(r, f)}: {ex}')
+                raise DirectoryError(f'💥 Unexpected exception reading file {candidate}: {ex}')
     raise DirectoryError(f'🫙 No valid DICOM files found in {target}')
 
 
@@ -100,3 +102,16 @@ def modality(ds: pydicom.Dataset) -> str:
     else:
         modality = 'UNKNOWN'
     return modality
+
+
+
+def iterate_paths(root: str) -> Iterable[str]:
+    '''Iterate over the paths in the given directory.
+
+    We can't assume DICOM files end in .dcm; a lot of them come in without extensions, so process every file.
+    '''
+    for r, _, files in os.walk(root, followlinks=True):
+        for f in files:
+            if f in IGNORED_FILES: continue
+            yield os.path.join(r, f)
+
