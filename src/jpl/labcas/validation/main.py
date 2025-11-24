@@ -189,9 +189,6 @@ def main():
         help='PHI/PII recognizer to use (see recognizer descriptions below)'
     )
     parser.add_argument(
-        '-o', '--output', default='report', help='Prefix for output files for the report, defaults to %(default)s'
-    )
-    parser.add_argument(
         '-u', '--url', help='URL to LabCAS Solr (optional; if not provided, files will not be confirmed published)'
     )
     parser.add_argument('directory', help='Directory to scan for DICOM files')
