@@ -53,7 +53,7 @@ def check_directory(target: str):
         #         raise DirectoryError(f'❌ Unexpected format for event folder "{event}" in {target}/{site}')
     
     # Now ensure there's at least one DICOM file somewhere under the target directory
-    for r, _, files in os.walk(target):
+    for r, _, files in os.walk(target, followlinks=True):
         for f in files:
             candidate = os.path.join(r, f)
             try:
