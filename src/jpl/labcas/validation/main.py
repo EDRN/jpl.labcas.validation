@@ -17,7 +17,7 @@ from .validators import VALIDATORS
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count
 from typing import Iterable
-import argparse, sys, logging, os, pydicom, pysolr, os.path
+import argparse, sys, logging, os, pydicom, pysolr, os.path, tempfile, sqlite3, threading
 
 
 
@@ -26,6 +26,8 @@ __copyright__ = 'Copyright © 2025 California Institute of Technology'
 __license__ = 'Apache 2.0'
 _recognizer = None  # The one recognizer we'll need for all workers for all files
 _logger = logging.getLogger(__name__)
+_db_path = None  # Path to SQLite database for storing findings
+_db_lock = None  # Lock for database access (per-process)
 
 
 def _score_type(value: str) -> float:
@@ -39,16 +41,85 @@ def _score_type(value: str) -> float:
         raise argparse.ArgumentTypeError(f'{value} is not a valid floating point number')
 
 
-def _init_worker(recognizer_name: str, recognizer_args: dict):
-    '''Initialize the worker by instantiating the global recognizer by name and its needed arguments.'''
-    global _recognizer
+def _init_worker(recognizer_name: str, recognizer_args: dict, db_path: str = None):
+    '''Initialize the worker by instantiating the global recognizer by name and its needed arguments.
+    
+    Args:
+        recognizer_name: Name of the recognizer to use
+        recognizer_args: Dictionary of arguments for the recognizer
+        db_path: Optional path to SQLite database (None for single-process mode)
+    '''
+    global _recognizer, _db_path, _db_lock
     # Configure logging for this worker process to match the parent process
     logging.basicConfig(level=recognizer_args.get('loglevel', logging.INFO), format='%(levelname)s %(message)s')
     _recognizer = PHI_PII_RECOGNIZERS[recognizer_name](argparse.Namespace(**recognizer_args))
+    _db_path = db_path
+    _db_lock = threading.Lock() if db_path else None  # Only need lock if using database
 
 
-def _scan_one(potential_file: PotentialFile) -> list[Finding]:
-    '''Scan a single file with the global recognizer and all the validators.'''
+def _write_finding_to_db(conn: sqlite3.Connection, finding: Finding):
+    '''Write a single finding to the database.'''
+    from ._classes import ErrorFinding, ValidationFinding, HeaderFinding, ImageFinding
+    
+    # Determine finding type and extract tag information
+    tag_obj = None
+    if isinstance(finding, ErrorFinding):
+        finding_type = 'ErrorFinding'
+        description = finding.error_message
+        pattern = None
+        index = None
+    elif isinstance(finding, ValidationFinding):
+        finding_type = 'ValidationFinding'
+        tag_obj = finding.tag
+        description = finding.description
+        pattern = None
+        index = None
+    elif isinstance(finding, HeaderFinding):
+        finding_type = 'HeaderFinding'
+        tag_obj = finding.tag
+        description = finding.description
+        pattern = None
+        index = None
+    elif isinstance(finding, ImageFinding):
+        finding_type = 'ImageFinding'
+        description = None
+        pattern = finding.pattern
+        index = finding.index
+    else:
+        finding_type = 'Finding'
+        description = None
+        pattern = None
+        index = None
+    
+    # Serialize tag as "group,element" string for storage
+    tag_str = None
+    if tag_obj:
+        tag_str = f'{tag_obj.group},{tag_obj.element}'
+    
+    conn.execute('''
+        INSERT INTO findings (file_path, site_id, event_id, file_name, finding_type, value, score, tag, description, pattern, index_val)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        finding.file.path,
+        finding.file.site_id,
+        finding.file.event_id,
+        finding.file.file_name,
+        finding_type,
+        finding.value,
+        finding.score,
+        tag_str,
+        description,
+        pattern,
+        index
+    ))
+
+def _scan_one(potential_file: PotentialFile) -> int | list[Finding]:
+    '''Scan a single file with the global recognizer and all the validators.
+    
+    Returns:
+        - If db_path is set: number of findings written to the database (int)
+        - If db_path is None: list of Finding objects (for single-process mode)
+    '''
     try:
         # We need the pixel data because we also do OCR to see if there's PHI/PII burnt into the image
         findings: list[Finding] = []
@@ -56,41 +127,161 @@ def _scan_one(potential_file: PotentialFile) -> list[Finding]:
         for validator in VALIDATORS:
             findings.extend(validator.validate(potential_file))
 
-        return findings
+        if _db_path is None:
+            # Single-process mode: return findings directly
+            return findings
+        
+        # Multi-process mode: write findings to database
+        if findings:
+            # Each process gets its own connection (SQLite handles concurrency well with separate connections)
+            with _db_lock:  # Lock for thread-safety within this process
+                conn = sqlite3.connect(_db_path, timeout=30.0)
+                try:
+                    for finding in findings:
+                        _write_finding_to_db(conn, finding)
+                    conn.commit()
+                    return len(findings)
+                finally:
+                    conn.close()
+        return 0
     except pydicom.errors.InvalidDicomError as ex:
         _logger.error('🤷 Ignoring invalid DICOM file: %s', potential_file)
-        # This produces a lot of noise in the report so for now we'll just report nothing
-        # return [ErrorFinding(file=path, value='🤷 Not a DICOM file', error_message=str(ex))]
-        return []
+        return [] if _db_path is None else 0
     except IOError as ex:
         _logger.error('💥 Problem reading file %s: %s', potential_file, ex)
-        return []
+        return [] if _db_path is None else 0
+    except Exception as ex:
+        _logger.error('💥 Unexpected error processing file %s: %s', potential_file, ex)
+        return [] if _db_path is None else 0
 
 
+
+def _create_findings_db(db_path: str):
+    '''Create the findings database schema.'''
+    conn = sqlite3.connect(db_path, timeout=30.0)
+    try:
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS findings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                file_path TEXT NOT NULL,
+                site_id TEXT NOT NULL,
+                event_id TEXT NOT NULL,
+                file_name TEXT NOT NULL,
+                finding_type TEXT NOT NULL,
+                value TEXT NOT NULL,
+                score REAL NOT NULL,
+                tag TEXT,
+                description TEXT,
+                pattern TEXT,
+                index_val INTEGER
+            )
+        ''')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_file_path ON findings(file_path)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_site_event ON findings(site_id, event_id)')
+        conn.commit()
+    finally:
+        conn.close()
+
+def _load_findings_from_db(db_path: str) -> list[Finding]:
+    '''Load all findings from the database and reconstruct Finding objects.'''
+    from ._classes import ErrorFinding, ValidationFinding, HeaderFinding, ImageFinding, PotentialFile
+    from pydicom.tag import Tag
+    
+    findings = []
+    conn = sqlite3.connect(db_path, timeout=30.0)
+    try:
+        cursor = conn.execute('''
+            SELECT file_path, site_id, event_id, file_name, finding_type, value, score, tag, description, pattern, index_val
+            FROM findings
+        ''')
+        for row in cursor:
+            file_path, site_id, event_id, file_name, finding_type, value, score, tag, description, pattern, index_val = row
+            potential_file = PotentialFile(file_path, site_id=site_id, event_id=event_id)
+            
+            # Reconstruct Tag object if present (stored as "group,element")
+            tag_obj = None
+            if tag:
+                try:
+                    # Tag is stored as "group,element" (e.g., "16,16" for 0x0010,0x0010)
+                    parts = tag.split(',')
+                    if len(parts) == 2:
+                        group = int(parts[0])
+                        element = int(parts[1])
+                        tag_obj = Tag((group, element))
+                except (ValueError, TypeError) as ex:
+                    _logger.debug('Could not reconstruct tag from "%s": %s', tag, ex)
+                    pass
+            
+            # Reconstruct the appropriate Finding subclass
+            finding = None
+            if finding_type == 'ErrorFinding':
+                finding = ErrorFinding(file=potential_file, value=value, score=score, error_message=description)
+            elif finding_type == 'ValidationFinding':
+                finding = ValidationFinding(file=potential_file, value=value, score=score, tag=tag_obj, description=description)
+            elif finding_type == 'HeaderFinding':
+                finding = HeaderFinding(file=potential_file, value=value, score=score, tag=tag_obj, description=description)
+            elif finding_type == 'ImageFinding':
+                finding = ImageFinding(file=potential_file, value=value, score=score, pattern=pattern or 'unknown', index=index_val or -1)
+            else:
+                # Unknown finding type - log warning and skip
+                _logger.warning('⚠️ Unknown finding type "%s" for file %s, skipping', finding_type, file_path)
+                continue
+            
+            if finding:
+                findings.append(finding)
+    finally:
+        conn.close()
+    
+    return findings
 
 def validate_pool(
-    directory: str, recognizer_name: str, args: argparse.Namespace, concurrency: int, file_generator) -> list[Finding]:
+    directory: str, recognizer_name: str, args: argparse.Namespace, concurrency: int, file_generator) -> tuple[str, int]:
     '''Validate the DICOM files in the given directory using a pool of workers.
     
     The `file_generator` function is a callable that returns an iterable of paths to the
     DICOM files in the given directory.
+    
+    Findings are written to a SQLite database by worker processes to reduce memory usage.
+    
+    Returns:
+        Tuple of (database_path, total_findings_count)
     '''
     args_dict = vars(args)
-    results: list[Finding] = []
-    with ProcessPoolExecutor(
-        max_workers=concurrency,
-        initializer=_init_worker,
-        initargs=(recognizer_name, args_dict),
-    ) as executor:
-        futures = (executor.submit(_scan_one, p) for p in file_generator())
+    
+    # Create a temporary SQLite database for findings
+    db_file = tempfile.NamedTemporaryFile(prefix='labcas_validation_findings_', suffix='.db', delete=False)
+    db_path = db_file.name
+    db_file.close()
+    _logger.info('📁 Using SQLite database for findings: %s', db_path)
+    
+    # Create the database schema
+    _create_findings_db(db_path)
+    
+    try:
+        with ProcessPoolExecutor(
+            max_workers=concurrency,
+            initializer=_init_worker,
+            initargs=(recognizer_name, args_dict, db_path),
+        ) as executor:
+            futures = (executor.submit(_scan_one, p) for p in file_generator())
+            total_findings = 0
+            try:
+                for future in as_completed(futures, timeout=None):
+                    count = future.result()
+                    total_findings += count
+            except KeyboardInterrupt:
+                # executor will clean up children on context exit
+                pass
+        
+        _logger.info('📊 Processed %d findings, stored in database', total_findings)
+        return db_path, total_findings
+    except Exception as ex:
+        # Clean up database on error
         try:
-            for future in as_completed(futures, timeout=None):
-                res = future.result()
-                if res: results.extend(res)
-        except KeyboardInterrupt:
-            # executor will clean up children on context exit
+            os.remove(db_path)
+        except:
             pass
-    return results
+        raise
 
 
 def validate_single(directory: str, recognizer_name: str, args: argparse.Namespace, file_generator) -> list[Finding]:
@@ -99,10 +290,12 @@ def validate_single(directory: str, recognizer_name: str, args: argparse.Namespa
     The `file_generator` function is a callable that returns an iterable of paths to the DICOM
     files in the given directory.
     '''
-    _init_worker(recognizer_name, vars(args))
+    _init_worker(recognizer_name, vars(args), db_path=None)  # No database for single-process mode
     results: list[Finding] = []
     for path in file_generator():
-        results.extend(_scan_one(path))
+        findings = _scan_one(path)
+        if isinstance(findings, list):
+            results.extend(findings)
     return results
 
 
@@ -207,13 +400,27 @@ def main():
         solr_url = None
         file_generator = _create_non_solr_paths_iterator(args.directory)
 
-    if args.concurrency == 1:
-        findings = validate_single(args.directory, args.recognizer, args, file_generator)
-    else:
-        findings = validate_pool(args.directory, args.recognizer, args, args.concurrency, file_generator)
-    _logger.info('🔍 Found %d findings', len(findings))
-    report = Report(findings, args.score)
-    report.generate_report()
+    db_path = None
+    try:
+        if args.concurrency == 1:
+            findings = validate_single(args.directory, args.recognizer, args, file_generator)
+            _logger.info('🔍 Found %d findings', len(findings))
+            report = Report(findings=findings, score=args.score)
+        else:
+            db_path, total_findings = validate_pool(args.directory, args.recognizer, args, args.concurrency, file_generator)
+            _logger.info('🔍 Found %d findings', total_findings)
+            report = Report(db_path=db_path, score=args.score)
+        
+        report.generate_report()
+    finally:
+        # Clean up database file if it was created
+        if db_path:
+            try:
+                os.remove(db_path)
+                _logger.info('🧹 Cleaned up database file')
+            except Exception as ex:
+                _logger.warning('⚠️ Could not remove database file %s: %s', db_path, ex)
+    
     sys.exit(0)
 
 if __name__ == '__main__':
