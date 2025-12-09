@@ -59,37 +59,8 @@ def _init_worker(recognizer_name: str, recognizer_args: dict, db_path: str = Non
 
 def _write_finding_to_db(conn: sqlite3.Connection, finding: Finding):
     '''Write a single finding to the database.'''
-    from ._classes import ErrorFinding, ValidationFinding, HeaderFinding, ImageFinding
-    
-    # Determine finding type and extract tag information
-    tag_obj = None
-    if isinstance(finding, ErrorFinding):
-        finding_type = 'ErrorFinding'
-        description = finding.error_message
-        pattern = None
-        index = None
-    elif isinstance(finding, ValidationFinding):
-        finding_type = 'ValidationFinding'
-        tag_obj = finding.tag
-        description = finding.description
-        pattern = None
-        index = None
-    elif isinstance(finding, HeaderFinding):
-        finding_type = 'HeaderFinding'
-        tag_obj = finding.tag
-        description = finding.description
-        pattern = None
-        index = None
-    elif isinstance(finding, ImageFinding):
-        finding_type = 'ImageFinding'
-        description = None
-        pattern = finding.pattern
-        index = finding.index
-    else:
-        finding_type = 'Finding'
-        description = None
-        pattern = None
-        index = None
+    # Get database fields from the finding object itself (polymorphic call)
+    finding_type, description, pattern, index, tag_obj = finding.generate_database_fields()
     
     # Serialize tag as "group,element" string for storage
     tag_str = None

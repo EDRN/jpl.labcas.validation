@@ -92,6 +92,15 @@ class Finding:
         '''Report on this finding to the `where` destination.'''
         raise NotImplementedError(f'{self.__class__.__name__} must implement the «report» method')
     
+    @abstractmethod
+    def generate_database_fields(self) -> tuple[str, str | None, str | None, int | None, Tag | None]:
+        '''Generate database fields for this finding.
+        
+        Returns:
+            Tuple of (finding_type, description, pattern, index, tag_obj)
+        '''
+        raise NotImplementedError(f'{self.__class__.__name__} must implement the «generate_database_fields» method')
+    
     def organization_parts(self) -> tuple[str, str, str]:
         '''Return the blinded site ID, event ID, and file name of this finding as a tuple of 3 strings.
         '''
@@ -120,6 +129,10 @@ class ErrorFinding(Finding):
 
     def report(self) -> list[str]:
         return [self.value, self.error_message]
+    
+    def generate_database_fields(self) -> tuple[str, str | None, str | None, int | None, Tag | None]:
+        '''Generate database fields for this error finding.'''
+        return (self.__class__.__name__, self.error_message, None, None, None)
     
     def __hash__(self) -> int:
         '''Return a hash of the error finding.'''
@@ -151,6 +164,10 @@ class ValidationFinding(Finding):
             detail = 'Failed core tag validation — please review for completeness and format'
         tag_name = datadict.keyword_for_tag(self.tag) if self.tag else 'unknown tag'
         return [f'{self.tag} ({tag_name})', f'«{self.value}»', detail]
+
+    def generate_database_fields(self) -> tuple[str, str | None, str | None, int | None, Tag | None]:
+        '''Generate database fields for this validation finding.'''
+        return (self.__class__.__name__, self.description, None, None, self.tag)
 
     def __hash__(self) -> int:
         '''Return a hash of the validation finding.'''
@@ -194,6 +211,10 @@ class HeaderFinding(PHI_PII_Finding):
             tag_str = 'unknown tag'
         return [tag_str, f'«{self.value}»', detail]
 
+    def generate_database_fields(self) -> tuple[str, str | None, str | None, int | None, Tag | None]:
+        '''Generate database fields for this header finding.'''
+        return (self.__class__.__name__, self.description, None, None, self.tag)
+
     def __hash__(self) -> int:
         '''Return a hash of the header finding.'''
         return super().__hash__() ^ hash(self.tag) ^ hash(self.description)
@@ -219,6 +240,10 @@ class ImageFinding(PHI_PII_Finding):
     def report(self) -> list[str]:
         # 🔮 Figure out how to describe OCR PHI/PII
         return [self.value, f'Detected with pattern {self.pattern} at frame index {self.index}']
+
+    def generate_database_fields(self) -> tuple[str, str | None, str | None, int | None, Tag | None]:
+        '''Generate database fields for this image finding.'''
+        return (self.__class__.__name__, None, self.pattern, self.index, None)
 
     def __hash__(self) -> int:
         '''Return a hash of the image finding.'''
@@ -418,13 +443,13 @@ class Report:
                             'index_val': index_val
                         })
                     
-                    # Write CSV file for this site (all events)
-                    with open(f'{site_id}.csv', 'w', newline='') as io:
-                        writer = csv.writer(io)
-                        writer.writerow(_header)
-                        
-                        # Process each event for this site
-                        for event_id in sorted(event_file_findings.keys()):
+                    # Process each event for this site
+                    for event_id in sorted(event_file_findings.keys()):
+                        # Write CSV file for this site_id-event_id combination
+                        with open(f'{site_id}-{event_id}.csv', 'w', newline='') as io:
+                            writer = csv.writer(io)
+                            writer.writerow(_header)
+                            
                             file_findings = event_file_findings[event_id]
                             for file_path, finding_types in sorted(file_findings.items()):
                                 file_name = os.path.basename(file_path)
@@ -459,12 +484,12 @@ class Report:
             # Use in-memory findings list (backward compatibility)
             organized = self._organize_report()
             for site_id, event_ids in organized.items():
-                # Write one CSV file per site (all events)
-                with open(f'{site_id}.csv', 'w', newline='') as io:
-                    writer = csv.writer(io)
-                    writer.writerow(_header)
-                    # Process all events for this site
-                    for event_id in sorted(event_ids.keys()):
+                # Process all events for this site
+                for event_id in sorted(event_ids.keys()):
+                    # Write CSV file for this site_id-event_id combination
+                    with open(f'{site_id}-{event_id}.csv', 'w', newline='') as io:
+                        writer = csv.writer(io)
+                        writer.writerow(_header)
                         file_names = event_ids[event_id]
                         for file_name, findings in sorted(file_names.items()):
                             kinds = sorted(list(set([f.kind() for f in findings])))
