@@ -34,7 +34,7 @@ Issues = 'https://github.com/EDRN/jpl.labcas.validation/issues'
 
 [project.scripts]
 validate-dicom-files = 'jpl.labcas.validation.main:main'
-split-dicom-report = 'jpl.labcas.validation.splitter:main'
+summarize-validation-reports = 'jpl.labcas.validation.summary:main'
 
 
 [tool.hatch.version]
