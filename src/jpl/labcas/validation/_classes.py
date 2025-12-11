@@ -396,7 +396,7 @@ class Report:
                 pass
         return 'unknown tag'
 
-    def generate_csv_report(self):
+    def generate_csv_report(self, output_directory: str):
         '''Generate CSV files of the findings.
         
         If db_path is set, queries the database directly without loading all findings into memory.
@@ -446,7 +446,7 @@ class Report:
                     # Process each event for this site
                     for event_id in sorted(event_file_findings.keys()):
                         # Write CSV file for this site_id-event_id combination
-                        with open(f'{site_id}-{event_id}.csv', 'w', newline='') as io:
+                        with open(os.path.join(output_directory, f'{site_id}-{event_id}.csv'), 'w', newline='') as io:
                             writer = csv.writer(io)
                             writer.writerow(_header)
                             
@@ -481,7 +481,7 @@ class Report:
             finally:
                 conn.close()
         else:
-            # Use in-memory findings list (backward compatibility)
+            # Use in-memory findings list (single-process mode)
             organized = self._organize_report()
             for site_id, event_ids in organized.items():
                 # Process all events for this site
@@ -518,5 +518,5 @@ class Report:
             report[site_id][event_id][file_name].append(finding)
         return report
 
-    def generate_report(self):
-        return self.generate_csv_report()
+    def generate_report(self, output_directory: str):
+        return self.generate_csv_report(output_directory)
