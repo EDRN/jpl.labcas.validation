@@ -5,6 +5,23 @@
 Scans a folder of DICOM files and checks for PHI/PII (or as Heather likes to call it, "de-id", which
 is clumsy as you're checking if de-identification happened by evidence of finding PHI or PII), and also
 checks compliance with the EDRN core and MR requirements for DICOM tags.
+
+To run this:
+
+    validate-dicom-files \
+        --url https://localhost:8984/solr/ \
+        --output /labcas-data/labcas-backend/reports/edrn/COLLECTION \
+        /labca-data/labcas-backend/archive/edrn/COLLECTION
+
+The idea is to build a "filesystem database" of CSV files from each COLLECTION in `/labcas-data/labcas-backend/reports/edrn/COLLECTION`.
+
+N.B.: This program generates enormous temporary files; you may wish to set `TMPDIR` to a directory on a spacious filesystem.
+
+Later, you can then run:
+
+    summarize-validation-reports /labcas-data/labcas-backend/reports/edrn
+
+to get the summary.
 '''
 
 from . import VERSION
@@ -18,7 +35,6 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count
 from typing import Iterable
 import argparse, sys, logging, os, pydicom, pysolr, os.path, tempfile, sqlite3, threading
-
 
 
 __doc__ = '🛂 EDRN DICOM Validation: check for PHI/PII and compliance with EDRN core and MR requirements for DICOM tags'
@@ -355,10 +371,15 @@ def main():
     parser.add_argument(
         '-u', '--url', help='URL to LabCAS Solr (optional; if not provided, files will not be confirmed published)'
     )
+    parser.add_argument(
+        '-o', '--output', default='.', help='Output directory for CSV files (defaults to the current directory)'
+    )
     parser.add_argument('directory', help='Directory to scan for DICOM files')
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel, format='%(levelname)s %(message)s')
     check_directory(args.directory)
+    output_directory = args.output.strip()
+    os.makedirs(output_directory, exist_ok=True)
     if args.url:
         solr_url = args.url.strip()
         solr_url = solr_url if solr_url.endswith('/') else solr_url + '/'
@@ -382,7 +403,7 @@ def main():
             _logger.info('🔍 Found %d findings', total_findings)
             report = Report(db_path=db_path, score=args.score)
         
-        report.generate_report()
+        report.generate_report(output_directory)
     finally:
         # Clean up database file if it was created
         if db_path:
