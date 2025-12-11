@@ -407,6 +407,7 @@ class Report:
 
         if self.db_path:
             # Query database directly for memory efficiency
+            _logger.info('Opening database at %s for reading', self.db_path)
             conn = sqlite3.connect(self.db_path, timeout=30.0)
             try:
                 # Get all unique site_ids
@@ -418,8 +419,10 @@ class Report:
                 ''', (self.score,))
                 
                 site_ids = [row[0] for row in cursor.fetchall()]
-                
+                _logger.info('Found %d unique site IDs', len(site_ids))
+
                 for site_id in site_ids:
+                    _logger.info('Processing site ID %s', site_id)
                     # Get all findings for this site (all events), grouped by file
                     cursor = conn.execute('''
                         SELECT event_id, file_path, file_name, finding_type, value, score, tag, description, pattern, index_val
@@ -446,7 +449,9 @@ class Report:
                     # Process each event for this site
                     for event_id in sorted(event_file_findings.keys()):
                         # Write CSV file for this site_id-event_id combination
-                        with open(os.path.join(output_directory, f'{site_id}-{event_id}.csv'), 'w', newline='') as io:
+                        output_file = os.path.join(output_directory, f'{site_id}-{event_id}.csv')
+                        _logger.info('Processing event ID %s and opening file %s', event_id, output_file)
+                        with open(output_file, 'w', newline='') as io:
                             writer = csv.writer(io)
                             writer.writerow(_header)
                             
@@ -479,9 +484,11 @@ class Report:
                                             details
                                         ])
             finally:
+                _logger.info('Closing database connection')
                 conn.close()
         else:
             # Use in-memory findings list (single-process mode)
+            _logger.info('Using in-memory findings list')
             organized = self._organize_report()
             for site_id, event_ids in organized.items():
                 # Process all events for this site
@@ -502,6 +509,7 @@ class Report:
                                     for finding in scored_findings:
                                         score, details = finding.score, ", ".join(finding.report())
                                         writer.writerow([site_id, event_id, file_name, score, kind, details])
+        _logger.info('Finished generating CSV reports')
 
     def _organize_report(self) -> dict:
         '''Organize the report into a dictionary (used only when findings list is provided).
