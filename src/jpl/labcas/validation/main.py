@@ -374,10 +374,13 @@ def main():
     parser.add_argument(
         '-o', '--output', default='.', help='Output directory for CSV files (defaults to the current directory)'
     )
-    parser.add_argument('directory', help='Directory to scan for DICOM files')
+    parser.add_argument(
+        '-f', '--findings-db',
+        help='Path to SQLite database of findings; if given the scan is skipped and this database is used instead to report on'
+    )
+    parser.add_argument('directory', nargs='?', help='Directory to scan for DICOM files')
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel, format='%(levelname)s %(message)s')
-    check_directory(args.directory)
     output_directory = args.output.strip()
     os.makedirs(output_directory, exist_ok=True)
     if args.url:
@@ -392,27 +395,32 @@ def main():
         solr_url = None
         file_generator = _create_non_solr_paths_iterator(args.directory)
 
-    db_path = None
-    try:
-        if args.concurrency == 1:
-            findings = validate_single(args.directory, args.recognizer, args, file_generator)
-            _logger.info('🔍 Found %d findings', len(findings))
-            report = Report(findings=findings, score=args.score)
-        else:
-            db_path, total_findings = validate_pool(args.directory, args.recognizer, args, args.concurrency, file_generator)
-            _logger.info('🔍 Found %d findings', total_findings)
-            report = Report(db_path=db_path, score=args.score)
-        
+    db_path = args.findings_db.strip() if args.findings_db else None
+    if db_path:
+        _logger.info('🔍 Using SQLite database for findings: %s', db_path)
+        report = Report(db_path=db_path, score=args.score)
         report.generate_report(output_directory)
-    finally:
-        # Clean up database file if it was created
-        if db_path:
-            try:
-                os.remove(db_path)
-                _logger.info('🧹 Cleaned up database file')
-            except Exception as ex:
-                _logger.warning('⚠️ Could not remove database file %s: %s', db_path, ex)
-    
+    elif not args.directory:
+        _logger.error('💥 No directory provided')
+        sys.exit(1)
+    else:  # No database path provided, so we need to scan the files
+        check_directory(args.directory)
+        _logger.info('🔍 Scanning directory: %s', args.directory)
+        try:
+            if args.concurrency == 1:
+                findings = validate_single(args.directory, args.recognizer, args, file_generator)
+                _logger.info('🔍 Found %d findings', len(findings))
+                report = Report(findings=findings, score=args.score)
+            else:
+                db_path, total_findings = validate_pool(args.directory, args.recognizer, args, args.concurrency, file_generator)
+                _logger.info('🔍 Found %d findings', total_findings)
+                report = Report(db_path=db_path, score=args.score)
+                _logger.info('🔍 Wrote database in: %s', db_path)
+            report.generate_report(output_directory)
+        finally:
+            if db_path:
+                _logger.info('Database findings preserved in %s', db_path)
+        
     sys.exit(0)
 
 if __name__ == '__main__':
