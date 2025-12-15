@@ -336,7 +336,7 @@ class Report:
         '''
         if db_path and findings:
             raise ValueError('Cannot specify both findings list and database path')
-        if not db_path and not findings:
+        if db_path is None and findings is None:
             raise ValueError('Must specify either findings list or database path')
         
         self.findings = findings

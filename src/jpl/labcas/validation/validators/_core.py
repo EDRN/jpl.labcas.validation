@@ -310,13 +310,48 @@ class ImageOrientationPatientValidator(Validator):
  # Image Type and Characteristics
  # ------------------------------
 
-class ImageTypeValidator(RegexValidator):
+class ImageTypeValidator(Validator):
     '''A validator that checks the ImageType tag.'''
 
     description = 'ImageType must be a 1 or more strings with the first string being "ORIGINAL" or "DERIVED", the second (if present) must be "PRIMARY" or "SECONDARY"; additional strings are allowed'
     tag = pydicom.tag.Tag((0x0008, 0x0008))
-    regex = re.compile(r"^\[('ORIGINAL'|'DERIVED')(,\s*('PRIMARY'|'SECONDARY'))?(,\s*.+)*\]$")
-
+    # regex = re.compile(r"^\[('ORIGINAL'|'DERIVED')(,\s*('PRIMARY'|'SECONDARY'))?(,\s*.+)*\]$")
+    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
+        '''Validate the given DICOM dataset and return a list of findings.'''
+        findings: list[ValidationFinding] = []
+        ds = potential_file.dcmread(stop_before_pixels=True, force=False)
+        elem = ds.get_item(self.tag)
+        if elem is not None:
+            if elem.value is None:
+                findings.append(ValidationFinding(
+                    file=potential_file, value='ImageType tag value has null values', tag=self.tag,
+                    description='ImageType tag value has null values'
+                ))
+            else:
+                try:
+                    values = elem.value.decode().split('\\')
+                    if len(values) > 0:
+                        if values[0].strip() not in ('ORIGINAL', 'DERIVED'):
+                            findings.append(ValidationFinding(
+                                file=potential_file, value=values[0], tag=self.tag,
+                                description=f'ImageType must start with "ORIGINAL" or "DERIVED"'
+                            ))
+                        if len(values) > 1:
+                            if values[1].strip() not in ('PRIMARY', 'SECONDARY'):
+                                findings.append(ValidationFinding(
+                                    file=potential_file, value=values[1], tag=self.tag,
+                                    description=f'ImageType must have a second string that is "PRIMARY" or "SECONDARY"'
+                                ))
+                except Exception:
+                    findings.append(ValidationFinding(
+                        file=potential_file, value='Non-text', tag=self.tag, description=f'ImageType has non-text values'
+                    ))
+        else:
+            findings.append(ValidationFinding(
+                file=potential_file, value='tag missing', tag=self.tag,
+                description='ImageOrientationPatient tag is missing'
+            ))
+        return findings
 
 # Lesion and Slice Details
 # ------------------------
