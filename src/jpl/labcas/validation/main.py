@@ -34,7 +34,7 @@ from .validators import VALIDATORS
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count
 from typing import Iterable
-import argparse, sys, logging, os, pydicom, pysolr, os.path, tempfile, sqlite3, threading
+import argparse, sys, logging, os, pydicom, pysolr, os.path, tempfile, sqlite3, threading, traceback
 
 
 __doc__ = '🛂 EDRN DICOM Validation: check for PHI/PII and compliance with EDRN core and MR requirements for DICOM tags'
@@ -139,6 +139,7 @@ def _scan_one(potential_file: PotentialFile) -> int | list[Finding]:
         return [] if _db_path is None else 0
     except Exception as ex:
         _logger.error('💥 Unexpected error processing file %s: %s', potential_file, ex)
+        _logger.error(traceback.format_exc())
         return [] if _db_path is None else 0
 
 

@@ -4,6 +4,7 @@
 
 from .._classes import Validator, ValidationFinding, PotentialFile
 from .._functions import textify_dicom_value
+from pydicom.dataelem import convert_raw_data_element
 import re, pydicom, logging
 from typing import ClassVar
 
@@ -47,6 +48,11 @@ class RegexValidator(Validator):
                 description=f'Required tag not found in DICOM dataset'
             ))
         else:
+            try:
+                elem = convert_raw_data_element(elem) 
+            except AttributeError as ex:
+                # Use elem directly as it is already a DataElement
+                pass
             value = textify_dicom_value(elem.value)
             if not value or not any(v.strip() for v in value):
                 findings.append(ValidationFinding(

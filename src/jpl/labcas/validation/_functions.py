@@ -5,8 +5,9 @@
 from .errors import DirectoryError
 from .const import IGNORED_FILES
 from typing import Iterable
-import re, os, pydicom
+import re, os, pydicom, logging
 
+_logger = logging.getLogger(__name__)
 _event_id_re = re.compile(r'^\d{7}$')
 
 
@@ -70,16 +71,26 @@ def textify_dicom_value(value: any) -> list[str]:
     '''Textify the given value.
     
     Returns a list of string representations of text-representable values.
-    Returns empty string for binary values or anything else that can't be represented as text.
+    For binary values (bytes/bytearray), attempts to decode to text. If successful and under
+    100 characters, returns the text. If 100+ characters, truncates to 100 and adds ellipsis.
+    Returns empty string for binary values that can't be decoded or anything else that can't be represented as text.
     '''
     result: list[str] = []
     
     # Handle strings directly
     if isinstance(value, str):
         result.append(value)
-    # Handle binary data by returning an empty string
+    # Handle binary data - attempt to decode to text
     elif isinstance(value, (bytes, bytearray)):
-        result.append('')
+        try:
+            decoded_text = value.decode('utf-8', errors='replace')
+            if len(decoded_text) < 100:
+                result.append(decoded_text)
+            else:
+                result.append(decoded_text[:100] + '…')
+        except Exception as ex:
+            _logger.warning(f'Failed to decode binary DICOM value to text: {ex}')
+            result.append('')
     # Handle sequences - recursively process each element and flatten
     elif isinstance(value, (list, tuple, set)):
         for v in value:

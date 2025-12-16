@@ -10,6 +10,8 @@ https://docs.google.com/spreadsheets/d/1Q56vKzK0nB4UAkfLJnBOy6C-7wtHccvZkWYGQHTM
 from .._classes import Validator, ValidationFinding, PotentialFile
 from .._functions import textify_dicom_value
 from ._base import RegexValidator, DICOMUIDValidator, YMDValidator
+from pydicom.dataelem import convert_raw_data_element
+from collections.abc import Sequence
 import pydicom, re, logging
 
 _logger = logging.getLogger(__name__)
@@ -207,12 +209,11 @@ class PhotometricInterpretationValidator(RegexValidator):
     regex = re.compile(r'^(MONOCHROME1|MONOCHROME2|PALETTE_COLOR|RGB|YBR_FULL)$')
 
 
-class WindowCenterValidator(RegexValidator):
+class WindowCenterValidator(Validator):
     '''A validator that checks the WindowCenter tag.'''
 
     description = 'WindowCenter must be an integer or floating point number; multiple numbers separated by backslashes are allowed'
     tag = pydicom.tag.Tag((0x0028, 0x1050))
-    regex = re.compile(r'^-?(\d+\.\d*|\d*\.\d+|\d+)(\\-?(\d+\.\d*|\d*\.\d+|\d+))*$')
 
     def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
         '''Validate the given DICOM dataset and return a list of findings.'''
@@ -224,7 +225,28 @@ class WindowCenterValidator(RegexValidator):
         if photometric_interpretation is not None:
             value = textify_dicom_value(photometric_interpretation.value)
             if any(v.strip() in ('MONOCHROME1', 'MONOCHROME2') for v in value):
-                findings.extend(super().validate(potential_file))
+                elem = ds.get_item(self.tag)
+                if elem is not None:
+                    values = convert_raw_data_element(elem).value
+                    # Normalize values to always be iterable (handle both MultiValue and single values like DSfloat)
+                    if values is None:
+                        values_iter = []
+                    elif isinstance(values, str) or not isinstance(values, Sequence):
+                        values_iter = [values]
+                    else:
+                        values_iter = values
+                    try:
+                        [float(v) for v in values_iter]
+                    except (ValueError, TypeError):
+                        findings.append(ValidationFinding(
+                            file=potential_file, value=values, tag=self.tag,
+                            description=f'WindowCenter must be an integer or floating point number'
+                        ))
+                else:
+                    findings.append(ValidationFinding(
+                        file=potential_file, value='value missing', tag=self.tag,
+                        description=f'WindowCenter tag is missing but required for MONOCHROME1 or MONOCHROME2 PhotometricInterpretation'
+                    ))
         return findings
 
 
@@ -242,12 +264,33 @@ class WindowWidthValidator(RegexValidator):
         ds = potential_file.dcmread(stop_before_pixels=True, force=False)
         findings: list[ValidationFinding] = []
 
-        # Validate the WindowWidth tag only if the PhotometricInterpretation is MONOCHROME1 or MONOCHROME2
+        # Validate the WindowCenter tag only if the PhotometricInterpretation is MONOCHROME1 or MONOCHROME2
         photometric_interpretation = ds.get_item((0x0028, 0x0004))
         if photometric_interpretation is not None:
             value = textify_dicom_value(photometric_interpretation.value)
             if any(v.strip() in ('MONOCHROME1', 'MONOCHROME2') for v in value):
-                findings.extend(super().validate(potential_file))
+                elem = ds.get_item(self.tag)
+                if elem is not None:
+                    values = convert_raw_data_element(elem).value
+                    # Normalize values to always be iterable (handle both MultiValue and single values like DSfloat)
+                    if values is None:
+                        values_iter = []
+                    elif isinstance(values, str) or not isinstance(values, Sequence):
+                        values_iter = [values]
+                    else:
+                        values_iter = values
+                    try:
+                        [float(v) for v in values_iter]
+                    except (ValueError, TypeError):
+                        findings.append(ValidationFinding(
+                            file=potential_file, value=values, tag=self.tag,
+                            description=f'WindowCenter must be an integer or floating point number'
+                        ))
+                else:
+                    findings.append(ValidationFinding(
+                        file=potential_file, value='value missing', tag=self.tag,
+                        description=f'WindowWidth tag is missing but required for MONOCHROME1 or MONOCHROME2 PhotometricInterpretation'
+                    ))
         return findings
 
 
@@ -279,6 +322,7 @@ class ImageOrientationPatientValidator(Validator):
         ds = potential_file.dcmread(stop_before_pixels=True, force=False)
         elem = ds.get_item(self.tag)
         if elem is not None:
+            elem = convert_raw_data_element(elem)
             if elem.value is None:
                 finding = ValidationFinding(
                     file=potential_file, value='ImageOrientationPatient tag value has null values', tag=self.tag,
@@ -315,7 +359,7 @@ class ImageTypeValidator(Validator):
 
     description = 'ImageType must be a 1 or more strings with the first string being "ORIGINAL" or "DERIVED", the second (if present) must be "PRIMARY" or "SECONDARY"; additional strings are allowed'
     tag = pydicom.tag.Tag((0x0008, 0x0008))
-    # regex = re.compile(r"^\[('ORIGINAL'|'DERIVED')(,\s*('PRIMARY'|'SECONDARY'))?(,\s*.+)*\]$")
+
     def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
         '''Validate the given DICOM dataset and return a list of findings.'''
         findings: list[ValidationFinding] = []
