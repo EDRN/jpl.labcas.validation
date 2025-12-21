@@ -68,10 +68,10 @@ def _unique_file_name(collection: str, site: str, event: str, file_name: str) ->
     return f'{collection}/{site}/{event}/{file_name}'
 
 
-def _get_collection_and_site_from_file_name(file_name: str) -> str:
+def _get_collection_and_site_and_event_from_file_name(file_name: str) -> str:
     '''Get the collection and site from the file name.'''
     splatted = file_name.split('/')
-    return f'{splatted[0]}: {splatted[1]}'
+    return f'{splatted[0]}: {splatted[1]}: {splatted[2]}'
 
 
 def _summarize_reports(report_directory: str, output: str):
@@ -101,12 +101,12 @@ def _summarize_reports(report_directory: str, output: str):
         writer = csv.writer(io)
         writer.writerow([
             'Issue', 'Total Files with this Issue', 'Percent of all Files', 'Colletions with this Issue',
-            'Number of Sites with Issue', 'Collection+BlindedSiteIDs with Issue'
+            'Number of Sites with Issue', 'Collection+BlindedSiteIDs+EventIDs with Issue'
         ])
         for issue in sorted(issue_by_site.keys()):
             sites, collections, files = issue_by_site[issue], issue_by_collection[issue], issue_by_files[issue]
             collections = ', '.join(sorted(collections))
-            col_sites = '; '.join(sorted(set([_get_collection_and_site_from_file_name(file) for file in files])))
+            col_sites = '; '.join(sorted(set([_get_collection_and_site_and_event_from_file_name(file) for file in files])))
             percentage = f'{len(files) / len(all_files):.2%}'
             writer.writerow([issue, len(files), percentage, collections, len(sites), col_sites])
 
