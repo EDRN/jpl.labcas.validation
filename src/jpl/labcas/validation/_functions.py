@@ -3,9 +3,9 @@
 '''🛂 EDRN DICOM Validation: functions.'''
 
 from .errors import DirectoryError
-from .const import IGNORED_FILES
+from .const import IGNORED_FILES, IGNORED_FOLDERS
 from typing import Iterable
-import re, os, pydicom, logging
+import re, os, pydicom, logging, os.path
 
 _logger = logging.getLogger(__name__)
 _event_id_re = re.compile(r'^\d{7}$')
@@ -122,7 +122,9 @@ def iterate_paths(root: str) -> Iterable[str]:
     We can't assume DICOM files end in .dcm; a lot of them come in without extensions, so process every file.
     '''
     for r, _, files in os.walk(root, followlinks=True):
+        dirname = os.path.basename(r)
+        if dirname in IGNORED_FOLDERS: continue
         for f in files:
             if f in IGNORED_FILES: continue
-            yield os.path.join(r, f)
-
+            file_to_yield = os.path.join(r, f)
+            yield file_to_yield

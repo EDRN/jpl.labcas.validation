@@ -8,3 +8,6 @@ PROCESS_TIMEOUT   = 30   # How many seconds to wait for a process to finish
 
 # Files to ignore when scanning for DICOM files
 IGNORED_FILES = {'.DS_Store', 'Thumbs.db', 'desktop.ini', 'DICOMDIR', 'Image.dir', 'Series.dir', '_OLD_'}
+
+# Folders whose contents we can skip completely
+IGNORED_FOLDERS = {'thumbnails'}
