@@ -27,6 +27,8 @@ _logger = logging.getLogger(__name__)
 _series_removal_re = re.compile(r'\(with the same SeriesInstanceUID [^)]+\)')
 _image_orientation_patient_removal_re = re.compile(r', «[^»]+», ')
 _phi_pii_removal_re = re.compile(r'\), .+$')
+_completeness_and_format_removal_re = re.compile(r'— please review for completeness and format')
+_sample_value_removal_re = re.compile(r'(, )?«[^»]*»,?')
 
 def _simplify_issue(finding, details: str) -> str:
     '''Simplify the issue description.
@@ -37,6 +39,8 @@ def _simplify_issue(finding, details: str) -> str:
 
     if finding == '🙈 Possible PHI/PII in Header':
         details = _phi_pii_removal_re.sub(") possible PHI/PII in tag's value", details)
+    elif finding == '👮 Warning':
+        details = 'Warning: ' + details
     elif finding == '🖼️ Possible Burned-in PHI/PII (Pixels)':
         details = 'Possible burned-in PHI/PII (pixels)'
     elif details.startswith('(0018,0088)'):
@@ -44,7 +48,16 @@ def _simplify_issue(finding, details: str) -> str:
     elif details.startswith('(0020,0037)'):
         details = _image_orientation_patient_removal_re.sub('', details)
 
-    return details
+
+    # Remove any found values so `(0008,0008) (ImageType), «Blah blah», Failed core…` and
+    # `(0008,0008) (ImageType), «Goober goober», Failed core…` are treated the same
+    details = _sample_value_removal_re.sub('', details)
+
+    # Remove the utterly useless "please review for completeness and format" text that appears on
+    # every single issue … le sigh!
+    details = _completeness_and_format_removal_re.sub('', details)
+
+    return details.strip()
 
 
 def _unique_file_name(collection: str, site: str, event: str, file_name: str) -> str:
