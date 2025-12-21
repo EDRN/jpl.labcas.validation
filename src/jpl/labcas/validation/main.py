@@ -100,6 +100,7 @@ def _write_finding_to_db(conn: sqlite3.Connection, finding: Finding):
         index
     ))
 
+
 def _scan_one(potential_file: PotentialFile) -> int | list[Finding]:
     '''Scan a single file with the global recognizer and all the validators.
     
@@ -143,7 +144,6 @@ def _scan_one(potential_file: PotentialFile) -> int | list[Finding]:
         return [] if _db_path is None else 0
 
 
-
 def _create_findings_db(db_path: str):
     '''Create the findings database schema.'''
     conn = sqlite3.connect(db_path, timeout=30.0)
@@ -169,6 +169,7 @@ def _create_findings_db(db_path: str):
         conn.commit()
     finally:
         conn.close()
+
 
 def _load_findings_from_db(db_path: str) -> list[Finding]:
     '''Load all findings from the database and reconstruct Finding objects.'''
@@ -221,6 +222,7 @@ def _load_findings_from_db(db_path: str) -> list[Finding]:
         conn.close()
     
     return findings
+
 
 def validate_pool(
     directory: str, recognizer_name: str, args: argparse.Namespace, concurrency: int, file_generator) -> tuple[str, int]:
