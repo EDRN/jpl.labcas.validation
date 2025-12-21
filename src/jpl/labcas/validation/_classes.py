@@ -183,6 +183,41 @@ class ValidationFinding(Finding):
 
 
 @dataclass
+class WarningFinding(Finding):
+    '''A finding in a DICOM file that is a warning.'''
+
+    tag: Tag | None = None
+    description: str | None = None
+
+    def kind(self) -> str:
+        return '👮 Warning'
+    
+    def report(self) -> list[str]:
+        if self.description:
+            detail = f'Warning: {self.description}'
+        else:
+            detail = 'Warning for not a more specific reason'
+        tag_name = datadict.keyword_for_tag(self.tag) if self.tag else 'unknown tag'
+        return [f'{self.tag} ({tag_name})', f'«{self.value}»', detail]    
+
+    def generate_database_fields(self) -> tuple[str, str | None, str | None, int | None, Tag | None]:
+        '''Generate database fields for this warning finding.'''
+        return (self.__class__.__name__, self.description, None, None, self.tag)
+    
+    def __hash__(self) -> int:
+        '''Return a hash of the warning finding.'''
+        return super().__hash__() ^ hash(self.description)
+    
+    def __eq__(self, other: WarningFinding) -> bool:
+        '''Return True if the two warning findings are equal.'''
+        return super().__eq__(other) and self.tag == other.tag and self.description == other.description
+
+    def __lt__(self, other: WarningFinding) -> bool:
+        '''Return True if the current warning finding is less than the other warning finding.'''
+        return super().__lt__(other) or (super().__eq__(other) and self.tag < other.tag and self.description < other.warning_message)
+
+
+@dataclass
 class PHI_PII_Finding(Finding):
     '''A finding in a DICOM file that is PHI or PII.'''
     
@@ -350,6 +385,7 @@ class Report:
             'ValidationFinding': '⚠️ Missing Required Tags',
             'HeaderFinding': '🙈 Possible PHI/PII in Header',
             'ImageFinding': '🖼️ Possible Burned-in PHI/PII (Pixels)',
+            'WarningFinding': '👮 Warning',
         }
         return kind_map.get(finding_type, '❓ Unknown')
 
@@ -376,6 +412,8 @@ class Report:
             return [tag_str, f'«{value}»', detail]
         elif finding_type == 'ImageFinding':
             return [value, f'Detected with pattern {pattern or "unknown"} at frame index {index_val or -1}']
+        elif finding_type == 'WarningFinding':
+            return [value, description or '']
         else:
             return [value]
 

@@ -2,10 +2,11 @@
 
 '''🛂 EDRN DICOM Validation: base validator classes.'''
 
-from .._classes import Validator, ValidationFinding, PotentialFile
+from .._classes import Validator, ValidationFinding, PotentialFile, WarningFinding
 from .._functions import textify_dicom_value
 from pydicom.dataelem import convert_raw_data_element
 import re, pydicom, logging
+from pydicom import datadict
 from typing import ClassVar
 
 _logger = logging.getLogger(__name__)
@@ -23,7 +24,7 @@ class RegexValidator(Validator):
         '''Override to enforce our own requirements without calling parent check.'''
         # Don't call super().__init_subclass__() - we'll enforce our own requirements
         # We require description, tag, AND regex for concrete subclasses
-        if cls.__name__ in ('DICOMUIDValidator', 'YMDValidator'):
+        if cls.__name__ in ('DICOMUIDValidator', 'YMDValidator', 'CaseInsensitiveAndWarningRegexValidator'):
             return
 
         import inspect
@@ -36,6 +37,10 @@ class RegexValidator(Validator):
             for attr in ('description', 'tag', 'regex'):
                 if not hasattr(cls, attr):
                     raise TypeError(f'{cls.__name__} must define a «{attr}» class attribute')
+
+    def _match_pattern(self, value: str):
+        '''Match the given value against our regex pattern.'''
+        return self.regex.match(value)
 
     def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
         '''Validate the given DICOM dataset `potential_file` against our regex pattern and return the findings.'''
@@ -67,7 +72,7 @@ class RegexValidator(Validator):
                         '🫆 Class %s checking value «%s» for tag %s in %s',
                         self.__class__.__name__, v, self.tag, potential_file
                     )
-                    if not self.regex.match(v):
+                    if not self._match_pattern(v):
                         findings.append(ValidationFinding(
                             file=potential_file, value=v, tag=self.tag,
                             description=f'Value for tag does not match expected pattern: {self.description}'
@@ -85,3 +90,32 @@ class YMDValidator(RegexValidator):
     '''An abstract validator that checks for a YYYYMMDD date.'''
 
     regex = re.compile(r'^[0-9]{8}$')
+
+
+class CaseInsensitiveAndWarningRegexValidator(RegexValidator):
+    '''An abstract validator that checks for a regex pattern and issue warnings.'''
+
+    class _CaseMismatchError(Exception):
+        '''Indicate that while the value might match the regex, it's doesn't match the letter case.'''
+        pass
+
+    def _match_pattern(self, value: str):
+        '''Match the given value against our regex pattern.
+
+        If the match fails, try again without regard to case. If that works, then raise an exception.
+        '''
+        matches = self.regex.match(value)
+        if matches is not None: return matches
+        case_insensitive_regex = re.compile(self.regex.pattern, self.regex.flags | re.IGNORECASE)
+        matches = case_insensitive_regex.match(value)
+        if matches is not None: raise self._CaseMismatchError(value)
+
+    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
+        try:
+            return super().validate(potential_file)
+        except self._CaseMismatchError as ex:
+            tag_name = datadict.keyword_for_tag(self.tag) if self.tag else 'unknown tag'
+            return [WarningFinding(
+                file=potential_file, value=f'«{ex.args[0]}»', tag=self.tag,
+                description=f'{self.tag} Value for {tag_name} matches expected pattern but uses incorrect case; {self.description}'
+            )]

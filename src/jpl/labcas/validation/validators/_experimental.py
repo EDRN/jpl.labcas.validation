@@ -5,7 +5,7 @@
 These validators are mostly for testing and development purposes.
 '''
 
-from .._classes import Validator, ValidationFinding, PotentialFile
+from .._classes import Validator, ValidationFinding, PotentialFile, WarningFinding
 import pydicom
 
 
@@ -19,7 +19,7 @@ class ExperimentalModalityValidator(Validator):
         return [ValidationFinding(
             file=potential_file,
             value=potential_file.dcmread(stop_before_pixels=True, force=False).Modality,
-            tag=self.tag,description='Modality is always UNACCEPTABLE for testing'
+            tag=self.tag, description='Modality is always UNACCEPTABLE for testing'
         )]
 
 
@@ -32,3 +32,16 @@ class ExperimentalManufacturerValidator(Validator):
     def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
         return []  # No findings means we're happy
 
+
+class ExperimentalWarningValidator(Validator):
+    '''An experimental validator that always issues a warning for the ImageType tag.'''
+
+    description = 'Experimental Warning (always issues a warning) for tag (0008,0008)'
+    tag = pydicom.tag.Tag((0x0008, 0x0008))
+
+    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
+        return [WarningFinding(
+            file=potential_file,
+            value="DOESN'T MATTER",
+            tag=self.tag, description='WARNING we may or may not have found an ImageType 😂'
+        )]

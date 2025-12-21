@@ -3,7 +3,9 @@
 '''🛂 EDRN DICOM Validation: validators.'''
 
 
-from ._experimental import ExperimentalModalityValidator, ExperimentalManufacturerValidator  # noqa: F401
+from ._experimental import (
+    ExperimentalModalityValidator, ExperimentalManufacturerValidator, ExperimentalWarningValidator  # noqa: F401
+)
 from ._core import (
     SeriesDescriptionValidator,
     StudyInstanceUIDValidator,
@@ -43,6 +45,7 @@ VALIDATORS = [
     # These are experimental validators for testing and development purposes and should not be used in production:
     # ExperimentalModalityValidator(),
     # ExperimentalManufacturerValidator(),
+    # ExperimentalWarningValidator(),
 
     SeriesDescriptionValidator(),
     StudyInstanceUIDValidator(),

@@ -7,9 +7,9 @@ The validators in this module are derived from the "CORE" tab of @hoodriverheath
 https://docs.google.com/spreadsheets/d/1Q56vKzK0nB4UAkfLJnBOy6C-7wtHccvZkWYGQHTMpBw/edit?gid=1779958583#gid=1779958583
 '''
 
-from .._classes import Validator, ValidationFinding, PotentialFile
+from .._classes import Validator, ValidationFinding, PotentialFile, WarningFinding
 from .._functions import textify_dicom_value
-from ._base import RegexValidator, DICOMUIDValidator, YMDValidator
+from ._base import RegexValidator, DICOMUIDValidator, YMDValidator, CaseInsensitiveAndWarningRegexValidator
 from pydicom.dataelem import convert_raw_data_element
 from collections.abc import Sequence
 import pydicom, re, logging
@@ -68,7 +68,7 @@ class SOPClassUIDValidator(DICOMUIDValidator):
 # Acquisition Modality and Equipment
 # ----------------------------------
 
-class ModalityValidator(RegexValidator):
+class ModalityValidator(CaseInsensitiveAndWarningRegexValidator):
     '''A validator that checks the Modality tag.'''
 
     description = 'Modality must be a valid DICOM code (CT, MR, MG, PT, etc.)'
@@ -199,7 +199,7 @@ class PixelRepresentationValidator(RegexValidator):
     regex = re.compile(r'^(0|1)$')
 
 
-class PhotometricInterpretationValidator(RegexValidator):
+class PhotometricInterpretationValidator(CaseInsensitiveAndWarningRegexValidator):
     '''A validator that checks the PhotometricInterpretation tag.'''
 
     description = 'PhotometricInterpretation must be a valid DICOM code (MONOCHROME1, MONOCHROME2, PALETTE_COLOR, RGB, YBR_FULL, YBR_PARTIAL_422, etc.)'
@@ -375,17 +375,29 @@ class ImageTypeValidator(Validator):
                 try:
                     values = elem.value.decode().split('\\')
                     if len(values) > 0:
-                        if values[0].strip() not in ('ORIGINAL', 'DERIVED'):
-                            findings.append(ValidationFinding(
-                                file=potential_file, value=values[0], tag=self.tag,
-                                description=f'ImageType must start with "ORIGINAL" or "DERIVED"'
-                            ))
-                        if len(values) > 1:
-                            if values[1].strip() not in ('PRIMARY', 'SECONDARY'):
-                                findings.append(ValidationFinding(
-                                    file=potential_file, value=values[1], tag=self.tag,
-                                    description=f'ImageType must have a second string that is "PRIMARY" or "SECONDARY"'
+                        if values[0].strip().upper() not in ('ORIGINAL', 'DERIVED'):
+                            if values[0].strip() in ('original', 'derived'):
+                                findings.append(WarningFinding(
+                                    file=potential_file, value=values[0], tag=self.tag,
+                                    description=f'ImageType must start with "ORIGINAL" or "DERIVED" in ALL CAPS'
                                 ))
+                            else:
+                                findings.append(ValidationFinding(
+                                    file=potential_file, value=values[0], tag=self.tag,
+                                    description=f'ImageType must start with "ORIGINAL" or "DERIVED"'
+                                ))
+                        if len(values) > 1:
+                            if values[1].strip().upper() not in ('PRIMARY', 'SECONDARY'):
+                                if values[1].strip() in ('primary', 'secondary'):
+                                    findings.append(WarningFinding(
+                                        file=potential_file, value=values[1], tag=self.tag,
+                                        description=f'ImageType must have a second string that is "PRIMARY" or "SECONDARY" in ALL CAPS'
+                                    ))
+                                else:
+                                    findings.append(ValidationFinding(
+                                        file=potential_file, value=values[1], tag=self.tag,
+                                        description=f'ImageType must have a second string that is "PRIMARY" or "SECONDARY"'
+                                    ))
                 except Exception:
                     findings.append(ValidationFinding(
                         file=potential_file, value='Non-text', tag=self.tag, description=f'ImageType has non-text values'
