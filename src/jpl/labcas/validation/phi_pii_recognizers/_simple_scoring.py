@@ -378,7 +378,13 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
                 score += 0.30
 
         # Added by ChatGPT: PN fields that *don’t* look like names → dampen
-        if vr == 'PN' and not (self._pn_structured.match(text) or self._patterns['NAME_like'].search(text)):
+        # Don't penalize PN values in strict_tags (high-risk fields) or values containing '^'
+        # (characteristic of DICOM person names), as these are legitimate names even if they don't
+        # match our regex patterns exactly
+        if (vr == 'PN' and 
+            tg not in self._strict_tags and 
+            '^' not in text and
+            not (self._pn_structured.match(text) or self._patterns['NAME_like'].search(text))):
             score -= 0.35   # pulls 0.85 → ~0.50
 
         # (Optional) If you want to go further for obvious pseudonyms
@@ -410,8 +416,10 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
                     c = c.strip()
                     if 'anonymized' in c.lower():
                         continue
-                    elif self._high_entropy(c):
+                    elif self._high_entropy(c) and vr != 'PN':
                         # Skip high-entropy strings (likely IDs, tokens, hashes)
+                        # BUT: Don't skip person name (PN) VR values even if they have high entropy,
+                        # as DICOM person names are legitimate names and may have high entropy
                         continue
                     elif c:
                         score = self._score(t, vr, c, None)
