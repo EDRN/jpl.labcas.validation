@@ -66,6 +66,7 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         re.compile(r'^PATIENT\^TEST$', re.IGNORECASE),
         re.compile(r'^(TEST|DEMO|SYNTHETIC|DUMMY)$', re.IGNORECASE),
         re.compile(r'^(DE[-_]?IDENTIFIED|DEIDENTIFIED)$', re.IGNORECASE),
+        re.compile(r'^DUMMY', re.IGNORECASE),  # Matches values starting with "DUMMY" (e.g., "DummyRefPhys!", "DummyOperName!")
     ]
 
     # Imaging jargon to filter out (to reduce name_like noise)
