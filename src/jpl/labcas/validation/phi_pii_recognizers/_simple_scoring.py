@@ -65,6 +65,7 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         re.compile(r'^(ANON|ANONYMOUS|REDACTED|REMOVED|UNKNOWN|N/A|null|NA)$', re.IGNORECASE),
         re.compile(r'^PATIENT\^TEST$', re.IGNORECASE),
         re.compile(r'^(TEST|DEMO|SYNTHETIC|DUMMY)$', re.IGNORECASE),
+        re.compile(r'^(DE[-_]?IDENTIFIED|DEIDENTIFIED)$', re.IGNORECASE),
     ]
 
     # Imaging jargon to filter out (to reduce name_like noise)
@@ -345,8 +346,11 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         '''
         text = str(value or '').strip()
 
+        # Check for anonymized values, including DICOM person name format (e.g., "Anonymous^^^^")
+        # Strip trailing carets from PN values before checking anonymized patterns
+        text_normalized = text.rstrip('^') if vr == 'PN' else text
         for rx in self._anonymized_patterns:
-            if rx.match(text):
+            if rx.match(text_normalized):
                 return 0.1
 
         score = 0.1
@@ -415,6 +419,11 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
                 for c in candidates:
                     c = c.strip()
                     if 'anonymized' in c.lower():
+                        continue
+                    # Check for anonymized values in DICOM person name format (e.g., "Anonymous^^^^")
+                    # Strip trailing carets before checking anonymized patterns
+                    c_normalized = c.rstrip('^') if vr == 'PN' else c
+                    if any(rx.match(c_normalized) for rx in self._anonymized_patterns):
                         continue
                     elif self._high_entropy(c) and vr != 'PN':
                         # Skip high-entropy strings (likely IDs, tokens, hashes)
