@@ -62,11 +62,16 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
 
     # Common regexes for de-identified text values
     _anonymized_patterns = [
-        re.compile(r'^(ANON|ANONYMOUS|REDACTED|REMOVED|UNKNOWN|N/A|null|NA)$', re.IGNORECASE),
+        re.compile(r'^(ANON|ANONYMOUS|REDACTED|REMOVED|UNKNOWN|N/A|null|NA|UNSPECIFIED)$', re.IGNORECASE),
         re.compile(r'^PATIENT\^TEST$', re.IGNORECASE),
         re.compile(r'^(TEST|DEMO|SYNTHETIC|DUMMY)$', re.IGNORECASE),
         re.compile(r'^(DE[-_]?IDENTIFIED|DEIDENTIFIED)$', re.IGNORECASE),
         re.compile(r'^DUMMY', re.IGNORECASE),  # Matches values starting with "DUMMY" (e.g., "DummyRefPhys!", "DummyOperName!")
+        # De-identified placeholder patterns: prefix followed by digits
+        re.compile(r'^REFPHYS\d+$', re.IGNORECASE),  # e.g., "REFPHYS554793"
+        re.compile(r'^RECPHYS\d+$', re.IGNORECASE),  # e.g., "RECPHYS554793"
+        re.compile(r'^OPERATOR\d+$', re.IGNORECASE),  # e.g., "OPERATOR554793"
+        re.compile(r'^PATIENT\d+$', re.IGNORECASE),  # e.g., "PATIENT39180"
     ]
 
     # Imaging jargon to filter out (to reduce name_like noise)
