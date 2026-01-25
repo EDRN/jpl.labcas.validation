@@ -53,7 +53,7 @@ class Profile:
                         description=description
                     )
                 findings.add(finding)
-        return list[Finding](sorted(findings))   
+        return sorted(list[Finding](findings))
 
 
 def register_profile(p: Profile):

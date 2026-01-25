@@ -48,7 +48,6 @@ def _simplify_issue(finding, details: str) -> str:
     elif details.startswith('(0020,0037)'):
         details = _image_orientation_patient_removal_re.sub('', details)
 
-
     # Remove any found values so `(0008,0008) (ImageType), «Blah blah», Failed core…` and
     # `(0008,0008) (ImageType), «Goober goober», Failed core…` are treated the same
     details = _sample_value_removal_re.sub('', details)

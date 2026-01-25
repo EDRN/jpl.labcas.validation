@@ -255,7 +255,9 @@ class Report:
                 # Process all events for this site
                 for event_id in sorted(event_ids.keys()):
                     # Write CSV file for this site_id-event_id combination
-                    with open(f'{site_id}-{event_id}.csv', 'w', newline='') as io:
+                    output_file = os.path.join(output_directory, f'{site_id}-{event_id}.csv')
+                    _logger.info('Processing event ID %s and opening file %s', event_id, output_file)
+                    with open(output_file, 'w', newline='') as io:
                         writer = csv.writer(io)
                         writer.writerow(_header)
                         file_names = event_ids[event_id]
