@@ -7,7 +7,9 @@ The validators in this module are derived from the "CORE" tab of @hoodriverheath
 https://docs.google.com/spreadsheets/d/1Q56vKzK0nB4UAkfLJnBOy6C-7wtHccvZkWYGQHTMpBw/edit?gid=1779958583#gid=1779958583
 '''
 
-from .._classes import Validator, ValidationFinding, PotentialFile, WarningFinding
+from .._classes import Validator
+from .._files import PotentialFile
+from .._findings import ValidationFinding, WarningFinding
 from .._functions import textify_dicom_value
 from ._base import RegexValidator, DICOMUIDValidator, YMDValidator, CaseInsensitiveAndWarningRegexValidator
 from pydicom.dataelem import convert_raw_data_element
@@ -215,10 +217,10 @@ class WindowCenterValidator(Validator):
     description = 'WindowCenter must be an integer or floating point number; multiple numbers separated by backslashes are allowed'
     tag = pydicom.tag.Tag((0x0028, 0x1050))
 
-    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
+    def validate(self, potential_file: PotentialFile) -> set[ValidationFinding]:
         '''Validate the given DICOM dataset and return a list of findings.'''
         ds = potential_file.dcmread(stop_before_pixels=True, force=False)
-        findings: list[ValidationFinding] = []
+        findings: set[ValidationFinding] = set()
 
         # Validate the WindowCenter tag only if the PhotometricInterpretation is MONOCHROME1 or MONOCHROME2
         photometric_interpretation = ds.get_item((0x0028, 0x0004))
@@ -238,12 +240,12 @@ class WindowCenterValidator(Validator):
                     try:
                         [float(v) for v in values_iter]
                     except (ValueError, TypeError):
-                        findings.append(ValidationFinding(
+                        findings.add(ValidationFinding(
                             file=potential_file, value=values, tag=self.tag,
                             description=f'WindowCenter must be an integer or floating point number'
                         ))
                 else:
-                    findings.append(ValidationFinding(
+                    findings.add(ValidationFinding(
                         file=potential_file, value='value missing', tag=self.tag,
                         description=f'WindowCenter tag is missing but required for MONOCHROME1 or MONOCHROME2 PhotometricInterpretation'
                     ))
@@ -259,10 +261,10 @@ class WindowWidthValidator(RegexValidator):
     tag = pydicom.tag.Tag((0x0028, 0x1051))
     regex = re.compile(r'^-?(\d+\.\d*|\d*\.\d+|\d+)(\\-?(\d+\.\d*|\d*\.\d+|\d+))*$')
 
-    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
+    def validate(self, potential_file: PotentialFile) -> set[ValidationFinding]:
         '''Validate the given DICOM dataset and return a list of findings.'''
         ds = potential_file.dcmread(stop_before_pixels=True, force=False)
-        findings: list[ValidationFinding] = []
+        findings: set[ValidationFinding] = set()
 
         # Validate the WindowCenter tag only if the PhotometricInterpretation is MONOCHROME1 or MONOCHROME2
         photometric_interpretation = ds.get_item((0x0028, 0x0004))
@@ -282,12 +284,12 @@ class WindowWidthValidator(RegexValidator):
                     try:
                         [float(v) for v in values_iter]
                     except (ValueError, TypeError):
-                        findings.append(ValidationFinding(
+                        findings.add(ValidationFinding(
                             file=potential_file, value=values, tag=self.tag,
                             description=f'WindowCenter must be an integer or floating point number'
                         ))
                 else:
-                    findings.append(ValidationFinding(
+                    findings.add(ValidationFinding(
                         file=potential_file, value='value missing', tag=self.tag,
                         description=f'WindowWidth tag is missing but required for MONOCHROME1 or MONOCHROME2 PhotometricInterpretation'
                     ))
@@ -316,9 +318,9 @@ class ImageOrientationPatientValidator(Validator):
     description = 'ImageOrientationPatient must be a 6 numeric values'
     tag = pydicom.tag.Tag((0x0020, 0x0037))
 
-    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
+    def validate(self, potential_file: PotentialFile) -> set[ValidationFinding]:
         '''Validate the given DICOM dataset and return a list of findings.'''
-        findings: list[ValidationFinding] = []
+        findings: set[ValidationFinding] = set()
         ds = potential_file.dcmread(stop_before_pixels=True, force=False)
         elem = ds.get_item(self.tag)
         if elem is not None:
@@ -328,7 +330,7 @@ class ImageOrientationPatientValidator(Validator):
                     file=potential_file, value='ImageOrientationPatient tag value has null values', tag=self.tag,
                     description='ImageOrientationPatient tag value has null values'
                 )
-                findings.append(finding)
+                findings.add(finding)
             else:
                 count = 0
                 for v in elem.value:
@@ -342,9 +344,9 @@ class ImageOrientationPatientValidator(Validator):
                         file=potential_file, value=str(elem.value), tag=self.tag,
                         description='ImageOrientationPatient must be a 6 numeric values'
                     )
-                    findings.append(finding)
+                    findings.add(finding)
         else:
-            findings.append(ValidationFinding(
+            findings.add(ValidationFinding(
                 file=potential_file, value='tag missing', tag=self.tag,
                 description='ImageOrientationPatient tag is missing')
             )
@@ -360,14 +362,14 @@ class ImageTypeValidator(Validator):
     description = 'ImageType must be a 1 or more strings with the first string being "ORIGINAL" or "DERIVED", the second (if present) must be "PRIMARY" or "SECONDARY"; additional strings are allowed'
     tag = pydicom.tag.Tag((0x0008, 0x0008))
 
-    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
+    def validate(self, potential_file: PotentialFile) -> set[ValidationFinding]:
         '''Validate the given DICOM dataset and return a list of findings.'''
-        findings: list[ValidationFinding] = []
+        findings: set[ValidationFinding] = set()
         ds = potential_file.dcmread(stop_before_pixels=True, force=False)
         elem = ds.get_item(self.tag)
         if elem is not None:
             if elem.value is None:
-                findings.append(ValidationFinding(
+                findings.add(ValidationFinding(
                     file=potential_file, value='ImageType tag value has null values', tag=self.tag,
                     description='ImageType tag value has null values'
                 ))
@@ -377,33 +379,33 @@ class ImageTypeValidator(Validator):
                     if len(values) > 0:
                         if values[0].strip().upper() not in ('ORIGINAL', 'DERIVED'):
                             if values[0].strip() in ('original', 'derived'):
-                                findings.append(WarningFinding(
+                                findings.add(WarningFinding(
                                     file=potential_file, value=values[0], tag=self.tag,
                                     description=f'ImageType must start with "ORIGINAL" or "DERIVED" in ALL CAPS'
                                 ))
                             else:
-                                findings.append(ValidationFinding(
+                                findings.add(ValidationFinding(
                                     file=potential_file, value=values[0], tag=self.tag,
                                     description=f'ImageType must start with "ORIGINAL" or "DERIVED"'
                                 ))
                         if len(values) > 1:
                             if values[1].strip().upper() not in ('PRIMARY', 'SECONDARY'):
                                 if values[1].strip() in ('primary', 'secondary'):
-                                    findings.append(WarningFinding(
+                                    findings.add(WarningFinding(
                                         file=potential_file, value=values[1], tag=self.tag,
                                         description=f'ImageType must have a second string that is "PRIMARY" or "SECONDARY" in ALL CAPS'
                                     ))
                                 else:
-                                    findings.append(ValidationFinding(
+                                    findings.add(ValidationFinding(
                                         file=potential_file, value=values[1], tag=self.tag,
                                         description=f'ImageType must have a second string that is "PRIMARY" or "SECONDARY"'
                                     ))
                 except Exception:
-                    findings.append(ValidationFinding(
+                    findings.add(ValidationFinding(
                         file=potential_file, value='Non-text', tag=self.tag, description=f'ImageType has non-text values'
                     ))
         else:
-            findings.append(ValidationFinding(
+            findings.add(ValidationFinding(
                 file=potential_file, value='tag missing', tag=self.tag,
                 description='ImageOrientationPatient tag is missing'
             ))

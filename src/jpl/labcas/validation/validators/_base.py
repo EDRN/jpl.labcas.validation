@@ -2,7 +2,9 @@
 
 '''🛂 EDRN DICOM Validation: base validator classes.'''
 
-from .._classes import Validator, ValidationFinding, PotentialFile, WarningFinding
+from .._classes import Validator
+from .._files import PotentialFile
+from .._findings import ValidationFinding, WarningFinding
 from .._functions import textify_dicom_value
 from pydicom.dataelem import convert_raw_data_element
 import re, pydicom, logging
@@ -42,13 +44,13 @@ class RegexValidator(Validator):
         '''Match the given value against our regex pattern.'''
         return self.regex.match(value)
 
-    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
+    def validate(self, potential_file: PotentialFile) -> set[ValidationFinding]:
         '''Validate the given DICOM dataset `potential_file` against our regex pattern and return the findings.'''
         ds = potential_file.dcmread(stop_before_pixels=True, force=False)
-        findings: list[ValidationFinding] = []
+        findings: set[ValidationFinding] = set()
         elem = ds.get_item(self.tag)
         if elem is None:
-            findings.append(ValidationFinding(
+            findings.add(ValidationFinding(
                 file=potential_file, value='tag missing', tag=self.tag,
                 description=f'Required tag not found in DICOM dataset'
             ))
@@ -60,7 +62,7 @@ class RegexValidator(Validator):
                 pass
             value = textify_dicom_value(elem.value)
             if not value or not any(v.strip() for v in value):
-                findings.append(ValidationFinding(
+                findings.add(ValidationFinding(
                     file=potential_file, value='value missing', tag=self.tag,
                     description=f'Tag found but missing a value in DICOM dataset'
                 ))
@@ -73,7 +75,7 @@ class RegexValidator(Validator):
                         self.__class__.__name__, v, self.tag, potential_file
                     )
                     if not self._match_pattern(v):
-                        findings.append(ValidationFinding(
+                        findings.add(ValidationFinding(
                             file=potential_file, value=v, tag=self.tag,
                             description=f'Value for tag does not match expected pattern: {self.description}'
                         ))
@@ -110,12 +112,12 @@ class CaseInsensitiveAndWarningRegexValidator(RegexValidator):
         matches = case_insensitive_regex.match(value)
         if matches is not None: raise self._CaseMismatchError(value)
 
-    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
+    def validate(self, potential_file: PotentialFile) -> set[ValidationFinding]:
         try:
             return super().validate(potential_file)
         except self._CaseMismatchError as ex:
             tag_name = datadict.keyword_for_tag(self.tag) if self.tag else 'unknown tag'
-            return [WarningFinding(
+            return set([WarningFinding(
                 file=potential_file, value=f'«{ex.args[0]}»', tag=self.tag,
                 description=f'{self.tag} Value for {tag_name} matches expected pattern but uses incorrect case; {self.description}'
-            )]
+            )])

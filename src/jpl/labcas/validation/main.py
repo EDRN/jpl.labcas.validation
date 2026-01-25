@@ -24,13 +24,14 @@ Later, you can then run:
 to get the summary.
 '''
 
-from . import VERSION
 from ._argparse import add_standard_argparse_options
-from ._classes import Finding, Report, ErrorFinding, PotentialFile
+from ._classes import Report
+from ._files import PotentialFile
+from ._findings import Finding
+from ._profiles import get_profile
 from ._functions import check_directory, iterate_paths
-from .const import PHI_PII_THRESHOLD, IGNORED_FILES
+from .const import PHI_PII_THRESHOLD
 from .phi_pii_recognizers import PHI_PII_RECOGNIZERS, DEFAULT_PHI_PII_RECOGNIZER
-from .validators import VALIDATORS
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count
 from typing import Iterable
@@ -110,10 +111,13 @@ def _scan_one(potential_file: PotentialFile) -> int | list[Finding]:
     '''
     try:
         # We need the pixel data because we also do OCR to see if there's PHI/PII burnt into the image
-        findings: list[Finding] = []
-        findings.extend(_recognizer.recognize(potential_file))
-        for validator in VALIDATORS:
-            findings.extend(validator.validate(potential_file))
+        findings: set[Finding] = set()
+        findings.update(_recognizer.recognize(potential_file))
+
+        # And now to validate the tags against a chosen profile of validators
+        profile = get_profile(potential_file.profile_name)
+        findings.update(profile.validate(potential_file))        
+        findings = list(findings)
 
         if _db_path is None:
             # Single-process mode: return findings directly
@@ -173,7 +177,8 @@ def _create_findings_db(db_path: str):
 
 def _load_findings_from_db(db_path: str) -> list[Finding]:
     '''Load all findings from the database and reconstruct Finding objects.'''
-    from ._classes import ErrorFinding, ValidationFinding, HeaderFinding, ImageFinding, PotentialFile
+    from ._findings import ErrorFinding, ValidationFinding, HeaderFinding, ImageFinding
+    from ._files import PotentialFile
     from pydicom.tag import Tag
     
     findings = []

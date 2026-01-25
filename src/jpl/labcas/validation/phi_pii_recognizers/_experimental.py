@@ -2,7 +2,9 @@
 
 '''🛂 EDRN DICOM Validation: experimental PHI/PII recognizers.'''
 
-from .._classes import PHI_PII_Recognizer, HeaderFinding, Finding, PotentialFile
+from .._classes import PHI_PII_Recognizer
+from .._files import PotentialFile
+from .._findings import HeaderFinding, Finding
 import pydicom, logging
 
 _logger = logging.getLogger(__name__)

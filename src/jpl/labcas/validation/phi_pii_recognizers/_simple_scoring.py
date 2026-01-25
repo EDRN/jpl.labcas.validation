@@ -2,7 +2,9 @@
 
 '''🛂 EDRN DICOM Validation: simple scoring PHI/PII recognizer.'''
 
-from .._classes import PHI_PII_Recognizer, Finding, HeaderFinding, ImageFinding, ErrorFinding, PotentialFile
+from .._classes import PHI_PII_Recognizer
+from .._files import PotentialFile
+from .._findings import Finding, HeaderFinding, ImageFinding, ErrorFinding
 from ..const import IMAGE_SCORE
 from collections import Counter
 from PIL import Image

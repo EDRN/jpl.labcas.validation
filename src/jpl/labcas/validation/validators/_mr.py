@@ -3,7 +3,8 @@
 '''🛂 EDRN DICOM Validation: MR validators.'''
 
 from ._base import RegexValidator, DICOMUIDValidator
-from .._classes import ValidationFinding, PotentialFile
+from .._files import PotentialFile
+from .._findings import ValidationFinding
 from .._functions import modality
 import pydicom, re, os, logging
 
@@ -66,9 +67,9 @@ class SpacingBetweenSlicesValidator(RegexValidator):
             # If anything goes wrong, assume false
             return False
 
-    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
+    def validate(self, potential_file: PotentialFile) -> set[ValidationFinding]:
         '''Validate the given DICOM dataset and return a list of findings.'''
-        findings: list[ValidationFinding] = []
+        findings: set[ValidationFinding] = set()
         ds = potential_file.dcmread(stop_before_pixels=True, force=False)
         if modality(ds) != 'MR': return findings
 
@@ -84,7 +85,7 @@ class SpacingBetweenSlicesValidator(RegexValidator):
                 else:
                     finding.description = 'Multiple DICOM files in the series (with the same SeriesInstanceUID) must have the SpacingBetweenSlices tag—in every file'
 
-            findings.extend(other_findings)
+            findings.update(other_findings)
         return findings
 
 
@@ -95,13 +96,13 @@ class AcquisitionMatrixValidator(RegexValidator):
     tag = pydicom.tag.Tag((0x0018, 0x0080))
     regex = re.compile(r'^\[(\d+,\s*){3}\d+\]$')
 
-    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
+    def validate(self, potential_file: PotentialFile) -> set[ValidationFinding]:
         '''Validate the given DICOM dataset and return a list of findings.'''
-        findings: list[ValidationFinding] = []
+        findings: set[ValidationFinding] = set()
         if modality(ds) != 'MR': return findings
 
         # Only bother to validate AcquisitionMatrix if tag (0018, 1310) exists and has a value
         elem = ds.get_item((0x0018, 0x1310))
         if elem is not None and elem.value:
-            findings.extend(super().validate(potential_file))
+            findings.update(super().validate(potential_file))
         return findings

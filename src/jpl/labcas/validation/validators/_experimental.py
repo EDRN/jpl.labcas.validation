@@ -5,7 +5,9 @@
 These validators are mostly for testing and development purposes.
 '''
 
-from .._classes import Validator, ValidationFinding, PotentialFile, WarningFinding
+from .._classes import Validator
+from .._files import PotentialFile
+from .._findings import ValidationFinding, WarningFinding
 import pydicom
 
 
@@ -15,12 +17,12 @@ class ExperimentalModalityValidator(Validator):
     description = 'Experimental Modality (always fails) for tag (0008,0060)'
     tag = pydicom.tag.Tag((0x0008, 0x0060))
 
-    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
-        return [ValidationFinding(
+    def validate(self, potential_file: PotentialFile) -> set[ValidationFinding]:
+        return set([ValidationFinding(
             file=potential_file,
             value=potential_file.dcmread(stop_before_pixels=True, force=False).Modality,
             tag=self.tag, description='Modality is always UNACCEPTABLE for testing'
-        )]
+        )])
 
 
 class ExperimentalManufacturerValidator(Validator):
@@ -29,8 +31,8 @@ class ExperimentalManufacturerValidator(Validator):
     description = 'Experimental Manufacturer (always passes) for tag (0008,0070)'
     tag = pydicom.tag.Tag((0x0008, 0x0070))
 
-    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
-        return []  # No findings means we're happy
+    def validate(self, potential_file: PotentialFile) -> set[ValidationFinding]:
+        return set()  # No findings means we're happy
 
 
 class ExperimentalWarningValidator(Validator):
@@ -39,9 +41,9 @@ class ExperimentalWarningValidator(Validator):
     description = 'Experimental Warning (always issues a warning) for tag (0008,0008)'
     tag = pydicom.tag.Tag((0x0008, 0x0008))
 
-    def validate(self, potential_file: PotentialFile) -> list[ValidationFinding]:
-        return [WarningFinding(
+    def validate(self, potential_file: PotentialFile) -> set[ValidationFinding]:
+        return set([WarningFinding(
             file=potential_file,
             value="DOESN'T MATTER",
             tag=self.tag, description='WARNING we may or may not have found an ImageType 😂'
-        )]
+        )])
