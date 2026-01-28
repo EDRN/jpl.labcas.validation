@@ -50,9 +50,10 @@ class RegexValidator(Validator):
         findings: set[ValidationFinding] = set()
         elem = ds.get_item(self.tag)
         if elem is None:
+            tag_name = datadict.keyword_for_tag(self.tag) if self.tag else 'unknown tag'
             findings.add(ValidationFinding(
                 file=potential_file, value='tag missing', tag=self.tag,
-                description=f'Required tag not found in DICOM dataset'
+                description=f'Required tag not found in DICOM dataset: {self.tag} {tag_name}'
             ))
         else:
             try:
@@ -62,9 +63,10 @@ class RegexValidator(Validator):
                 pass
             value = textify_dicom_value(elem.value)
             if not value or not any(v.strip() for v in value):
+                tag_name = datadict.keyword_for_tag(self.tag) if self.tag else 'unknown tag'
                 findings.add(ValidationFinding(
                     file=potential_file, value='value missing', tag=self.tag,
-                    description=f'Tag found but missing a value in DICOM dataset'
+                    description=f'Tag {self.tag} ({tag_name}) found but missing a value in DICOM dataset'
                 ))
             else:
                 for v in value:
