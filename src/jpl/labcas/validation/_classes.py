@@ -164,7 +164,7 @@ class Report:
         Otherwise, uses the findings list.
         '''
         _logger.info('📝 Generating CSV reports')
-        _header = ['Site ID', 'Event ID', 'File Name', 'Score', 'Findings', 'Details']
+        _header = ['Site ID', 'Event ID', 'File Name', 'Profile', 'Score', 'Findings', 'Details']
 
         if self.db_path:
             # Query database directly for memory efficiency
@@ -219,6 +219,10 @@ class Report:
                             file_findings = event_file_findings[event_id]
                             for file_path, finding_types in sorted(file_findings.items()):
                                 file_name = os.path.basename(file_path)
+                                # Get profile name for this file
+                                from ._files import PotentialFile
+                                potential_file = PotentialFile(file_path)
+                                profile_name = potential_file.profile_name.value if potential_file.profile_name else 'Unknown'
                                 kinds = sorted(finding_types.keys())
                                 
                                 for kind_type in kinds:
@@ -239,7 +243,8 @@ class Report:
                                         writer.writerow([
                                             site_id, 
                                             event_id, 
-                                            file_name, 
+                                            file_name,
+                                            profile_name,
                                             finding_data['score'], 
                                             kind,
                                             details
@@ -269,9 +274,11 @@ class Report:
                                     key=lambda x: x.score, reverse=True
                                 )
                                 if len(scored_findings) > 0:
+                                    # Get profile name from the first finding (all findings for same file have same profile)
+                                    profile_name = scored_findings[0].file.profile_name.value if scored_findings[0].file.profile_name else 'Unknown'
                                     for finding in scored_findings:
                                         score, details = finding.score, ", ".join(finding.report())
-                                        writer.writerow([site_id, event_id, file_name, score, kind, details])
+                                        writer.writerow([site_id, event_id, file_name, profile_name, score, kind, details])
         _logger.info('Finished generating CSV reports')
 
     def _organize_report(self) -> dict:

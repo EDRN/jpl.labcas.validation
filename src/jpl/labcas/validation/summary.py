@@ -87,7 +87,7 @@ def _summarize_reports(report_directory: str, output: str):
             reader = csv.reader(io)
             for row in reader:
                 if row[0] == 'Site ID': continue
-                site, event, file_name, score, finding, details = row
+                site, event, file_name, profile, score, finding, details = row
                 unique_file_name = _unique_file_name(collection, site, event, file_name)
                 all_files.add(unique_file_name)
                 issue = _simplify_issue(finding, details)

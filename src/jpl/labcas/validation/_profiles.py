@@ -13,15 +13,15 @@ _logger = logging.getLogger(__name__)
 
 class ProfileName(Enum):
     '''The name of a profile.'''
-    NULL    = 'null'     # No-op or null profile that does no validation at all
-    CT_LOC  = 'ct-loc'   # CT localizer / scout images
-    CT_STD  = 'ct-std'   # CT standard images
-    MR_LOC  = 'mr-loc'   # MR localizer images
-    MR_STD  = 'mr-std'   # MR standard images
-    PET_STD = 'pet-std'  # PET images
-    SC      = 'sc'       # Secondary Capture
-    SEG     = 'seg'      # Segmentation objects
-    GENERIC = 'generic'  # Generic profile for when nothing else applies
+    NULL    = 'null'
+    CT_LOC  = 'CT localizer'
+    CT_STD  = 'CT standard'
+    MR_LOC  = 'MR localizer'
+    MR_STD  = 'MR standard'
+    PET_STD = 'PET standard'
+    SC      = 'Secondary capture'
+    SEG     = 'Segmentation objects'
+    GENERIC = 'Generic'
 
 
 class Profile:
