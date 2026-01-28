@@ -74,6 +74,9 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         re.compile(r'^RECPHYS\d+$', re.IGNORECASE),  # e.g., "RECPHYS554793"
         re.compile(r'^OPERATOR\d+$', re.IGNORECASE),  # e.g., "OPERATOR554793"
         re.compile(r'^PATIENT\d+$', re.IGNORECASE),  # e.g., "PATIENT39180"
+        # DICOM Person Name (PN) format with NONE as a component (e.g., "NAME^NONE", "SOMETHING^NONE^OTHER")
+        re.compile(r'^[A-Z0-9]+\^NONE(\^|$)', re.IGNORECASE),  # Matches PN values where any component is "NONE"
+        re.compile(r'\^NONE(\^|$)', re.IGNORECASE),  # Matches any PN component that is "NONE"
     ]
 
     # Imaging jargon to filter out (to reduce name_like noise)
@@ -270,6 +273,17 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         s = (s or '').replace('\x00', '').strip()
         return s[:self._max_normalized_string] if len(s) > self._max_normalized_string else s
 
+    def _is_pn_with_none(self, s: str) -> bool:
+        '''Check if a DICOM Person Name (PN) value contains "NONE" as any component.
+        
+        DICOM PN format is: FamilyName^GivenName^MiddleName^NamePrefix^NameSuffix
+        Returns True if any component (separated by ^) is "NONE" (case-insensitive).
+        '''
+        if not s or '^' not in s:
+            return False
+        components = s.split('^')
+        return any(comp.strip().upper() == 'NONE' for comp in components)
+
     def _textify(self, obj) -> list[str]:
         '''Recursively extract human text from common DICOM value shapes.'''
         out: list[str] = []
@@ -355,10 +369,14 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         text = str(value or '').strip()
 
         # Check for anonymized values, including DICOM person name format (e.g., "Anonymous^^^^")
+        # For PN values, check if any component is "NONE" (e.g., "NAME^NONE")
+        if vr == 'PN' and self._is_pn_with_none(text):
+            return 0.1
+        
         # Strip trailing carets from PN values before checking anonymized patterns
         text_normalized = text.rstrip('^') if vr == 'PN' else text
         for rx in self._anonymized_patterns:
-            if rx.match(text_normalized):
+            if rx.match(text_normalized) or rx.search(text_normalized):
                 return 0.1
 
         score = 0.1
@@ -429,9 +447,12 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
                     if 'anonymized' in c.lower():
                         continue
                     # Check for anonymized values in DICOM person name format (e.g., "Anonymous^^^^")
+                    # For PN values, check if any component is "NONE" (e.g., "NAME^NONE")
+                    if vr == 'PN' and self._is_pn_with_none(c):
+                        continue
                     # Strip trailing carets before checking anonymized patterns
                     c_normalized = c.rstrip('^') if vr == 'PN' else c
-                    if any(rx.match(c_normalized) for rx in self._anonymized_patterns):
+                    if any(rx.match(c_normalized) or rx.search(c_normalized) for rx in self._anonymized_patterns):
                         continue
                     elif self._high_entropy(c) and vr != 'PN':
                         # Skip high-entropy strings (likely IDs, tokens, hashes)
@@ -462,6 +483,10 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
 
             for c in candidates:
                 if not c.strip(): continue
+
+                # Skip PN values with "NONE" as a component (e.g., "NAME^NONE")
+                if vr == 'PN' and self._is_pn_with_none(c):
+                    continue
 
                 # Special case: DICOM person name (PN) structured name detection (only when allowed
                 # as a name field)
