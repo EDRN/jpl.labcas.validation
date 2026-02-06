@@ -7,7 +7,7 @@ PHI_PII_THRESHOLD = 0.8  # Default score ≥ to this means the file is probably 
 PROCESS_TIMEOUT   = 30   # How many seconds to wait for a process to finish
 
 # Files to ignore when scanning for DICOM files
-IGNORED_FILES = {'.DS_Store', 'Thumbs.db', 'desktop.ini', 'DICOMDIR', 'Image.dir', 'Series.dir', '_OLD_'}
+IGNORED_FILES = {'.DS_Store', 'Thumbs.db', 'desktop.ini', 'DICOMDIR', 'DICOMDIR.dcm', 'Image.dir', 'Series.dir', '_OLD_'}
 
 # Folders whose contents we can skip completely
 IGNORED_FOLDERS = {'thumbnails'}
