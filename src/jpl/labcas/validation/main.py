@@ -386,7 +386,7 @@ def main():
         '-f', '--findings-db',
         help='Path to SQLite database of findings; if given the scan is skipped and this database is used instead to report on'
     )
-    parser.add_argument('directory', nargs='?', help='Directory to scan for DICOM files')
+    parser.add_argument('directory', nargs='?', help='Directory to scan for DICOM files which typically ends in a collection name like "Prostate_MRI"')
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel, format='%(levelname)s %(message)s')
     output_directory = args.output.strip()

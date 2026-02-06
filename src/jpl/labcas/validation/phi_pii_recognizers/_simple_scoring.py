@@ -39,6 +39,9 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         (0x0008, 0x1050),  # PerformingPhysicianName
         (0x0008, 0x1060),  # NameOfPhysiciansReadingStudy
         (0x0008, 0x1070),  # OperatorsName
+
+        # Private tags that may contain PHI/PII
+        (0x0400, 0x0550),  # Private tag that may contain PHI/PII
     }
 
     # These tend to have less identifiable information
@@ -429,6 +432,55 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         ds = potential_file.dcmread(stop_before_pixels=True, force=False, cache=False)
         # Gather all candidate strings from the dataset
         findings: list[Finding] = []
+        
+        # Check sequence tags in _strict_tags (they're not yielded by _iter_over_dicom_elements)
+        for elem in ds.iterall():
+            t = pydicom.tag.Tag(elem.tag)
+            if (t.group, t.element) in self._strict_tags and elem.VR == 'SQ':
+                # This is a sequence tag in strict_tags, check if it contains PHI/PII
+                tag_keyword = datadict.keyword_for_tag(t) or f'{t.group:04x}{t.element:04x}'
+                # Extract all text from the sequence
+                sequence_texts = []
+                for item in (elem.value or []):
+                    for sub_elem in item:
+                        if sub_elem.VR not in ('OB', 'OW', 'OF', 'OD', 'OL', 'OV', 'UN'):
+                            sequence_texts.extend(self._textify(sub_elem.value))
+                
+                # Check if any text in the sequence looks like PHI/PII
+                found_phi_pii = False
+                best_score = 0.0
+                best_value = None
+                for c in sequence_texts:
+                    c = c.strip()
+                    if not c:
+                        continue
+                    if 'anonymized' in c.lower():
+                        continue
+                    # Check anonymized patterns
+                    c_normalized = c.rstrip('^')
+                    if any(rx.match(c_normalized) or rx.search(c_normalized) for rx in self._anonymized_patterns):
+                        continue
+                    # Check for pattern matches
+                    matched_key = None
+                    for key, rx in self._patterns.items():
+                        if rx.search(c):
+                            matched_key = key
+                            break
+                    # Calculate score for this text
+                    score = self._score(t, 'SQ', c, matched_key)
+                    if score > best_score:
+                        best_score = score
+                        best_value = c
+                    found_phi_pii = True
+                
+                # Flag the sequence tag itself if it contains PHI/PII
+                if found_phi_pii and best_value:
+                    finding = HeaderFinding(
+                        file=potential_file, value=self._displayable_str(best_value), score=best_score, tag=t,
+                        description=f'Strict high-risk sequence tag "{tag_keyword}" contains PHI/PII with score {best_score:.2f} — there may be additional PHI/PII in this tag, this is just the first detection'
+                    )
+                    findings.append(finding)
+        
         for path, value, vr, t in self._iter_over_dicom_elements(ds):
             # Skip binary VRs (OB, OW, OF, OD, OL, OV, UN) because they contain raw data, not text
             if vr in ('OB', 'OW', 'OF', 'OD', 'OL', 'OV', 'UN'): continue
