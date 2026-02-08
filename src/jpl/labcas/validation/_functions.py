@@ -72,7 +72,8 @@ def is_anonymized_value(s: str) -> bool:
     
     Returns True if the value:
     - Starts with "anon" (case-insensitive), OR
-    - Matches "Doe John", "Doe^John", "John Doe", or "John^Doe" (case-insensitive)
+    - Matches "Doe John", "Doe^John", "John Doe", or "John^Doe" (case-insensitive), OR
+    - Matches the specific anonymized value "P0HeLkT8KYKj14Q7GTGJjL^ry_x+LTzqsQgC9B5hZWso"
     '''
     if not s:
         return False
@@ -86,11 +87,16 @@ def is_anonymized_value(s: str) -> bool:
     if s_lower.startswith('anon'):
         return True
     
+    # Check for specific anonymized value
+    # Also handle trailing carets/spaces
+    normalized = s_stripped.rstrip('^').strip()
+    normalized_lower = normalized.lower()
+    if normalized_lower == 'p0helkt8kykj14q7gtgjjl^ry_x+ltzqsqgc9b5hzwso':
+        return True
+    
     # Check for "Doe John" patterns (case-insensitive)
     # Match: "Doe John", "Doe^John", "John Doe", "John^Doe"
     # Also handle trailing carets/spaces and multiple carets
-    normalized = s_stripped.rstrip('^').strip()
-    normalized_lower = normalized.lower()
     
     # Check exact matches for common patterns
     if normalized_lower in ('doe john', 'john doe', 'doe^john', 'john^doe'):
