@@ -230,6 +230,9 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
             for key, rx in self._patterns.items():
                 for m in rx.finditer(text):
                     excerpt = text[max(0, m.start() - 24):m.end() + 24]  # Grab 24 characters of context on each side
+                    # Skip anonymized values (starts with "anon" or matches "Doe John" patterns)
+                    if self._is_anonymized_value(excerpt):
+                        continue
                     finding = ImageFinding(
                         file=potential_file, value=self._displayable_str(excerpt), pattern=key,
                         score=IMAGE_SCORE, index=idx
@@ -275,6 +278,43 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         '''Normalizes a string by removing null bytes, stripping, and truncating.'''
         s = (s or '').replace('\x00', '').strip()
         return s[:self._max_normalized_string] if len(s) > self._max_normalized_string else s
+
+    def _is_anonymized_value(self, s: str) -> bool:
+        '''Check if a value should be considered anonymized and skipped.
+        
+        Returns True if the value:
+        - Starts with "anon" (case-insensitive), OR
+        - Matches "Doe John", "Doe^John", "John Doe", or "John^Doe" (case-insensitive)
+        '''
+        if not s:
+            return False
+        s_stripped = s.strip()
+        if not s_stripped:
+            return False
+        
+        s_lower = s_stripped.lower()
+        
+        # Check if starts with "anon"
+        if s_lower.startswith('anon'):
+            return True
+        
+        # Check for "Doe John" patterns (case-insensitive)
+        # Match: "Doe John", "Doe^John", "John Doe", "John^Doe"
+        # Also handle trailing carets/spaces and multiple carets
+        normalized = s_stripped.rstrip('^').strip()
+        normalized_lower = normalized.lower()
+        
+        # Check exact matches for common patterns
+        if normalized_lower in ('doe john', 'john doe', 'doe^john', 'john^doe'):
+            return True
+        
+        # Check if it matches the pattern with optional spaces/carets
+        # Pattern: (Doe|John) followed by (space or ^) followed by (John|Doe)
+        doe_john_pattern = re.compile(r'^(doe|john)[\s\^]+(john|doe)', re.IGNORECASE)
+        if doe_john_pattern.match(normalized):
+            return True
+        
+        return False
 
     def _is_pn_with_none(self, s: str) -> bool:
         '''Check if a DICOM Person Name (PN) value contains "NONE" as any component.
@@ -325,10 +365,13 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
 
         _recurse(obj)
 
-        # Deduplicate while preserving order
+        # Deduplicate while preserving order and filter out anonymized values
         seen, uniq = set(), []
         for s in out:
             if s not in seen:
+                # Skip anonymized values (starts with "anon" or matches "Doe John" patterns)
+                if self._is_anonymized_value(s):
+                    continue
                 seen.add(s)
                 uniq.append(s)
         return uniq
@@ -454,6 +497,9 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
                     c = c.strip()
                     if not c:
                         continue
+                    # Skip anonymized values (starts with "anon" or matches "Doe John" patterns)
+                    if self._is_anonymized_value(c):
+                        continue
                     if 'anonymized' in c.lower():
                         continue
                     # Check anonymized patterns
@@ -493,9 +539,12 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
 
             # Auto-flag truly risky tags and only when we have real text
             if (t.group, t.element) in self._strict_tags:
-                tag_keyword = datadict.keyword_for_tag(t)
+                # tag_keyword already retrieved above
                 for c in candidates:
                     c = c.strip()
+                    # Skip anonymized values (starts with "anon" or matches "Doe John" patterns)
+                    if self._is_anonymized_value(c):
+                        continue
                     if 'anonymized' in c.lower():
                         continue
                     # Check for anonymized values in DICOM person name format (e.g., "Anonymous^^^^")
@@ -520,13 +569,14 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
                         findings.append(finding)
 
             # Pattern-based detection (emails, phone numbers, SSNs, DOBs, person names, etc.)
+            # tag_keyword already retrieved above, but get it from element if available for consistency
             elem = ds.get_item(t)
             # RawDataElement objects don't have a keyword attribute, so use getattr with fallback to datadict
-            tag_keyword = getattr(elem, 'keyword', None) if elem is not None else None
-            if tag_keyword is None:
-                tag_keyword = datadict.keyword_for_tag(t) or ''
+            elem_keyword = getattr(elem, 'keyword', None) if elem is not None else None
+            if elem_keyword is None:
+                tag_keyword = tag_keyword or datadict.keyword_for_tag(t) or ''
             else:
-                tag_keyword = tag_keyword or ''
+                tag_keyword = elem_keyword or tag_keyword or ''
             vendor_context = tag_keyword in self._vendor_safe_tags
 
             # Allow name-like patterns where the keyword says it's a name or when value-representation
@@ -535,6 +585,10 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
 
             for c in candidates:
                 if not c.strip(): continue
+
+                # Skip anonymized values (starts with "anon" or matches "Doe John" patterns)
+                if self._is_anonymized_value(c):
+                    continue
 
                 # Skip PN values with "NONE" as a component (e.g., "NAME^NONE")
                 if vr == 'PN' and self._is_pn_with_none(c):

@@ -5,7 +5,7 @@
 from .._classes import Validator
 from .._files import PotentialFile
 from .._findings import ValidationFinding, WarningFinding
-from .._functions import textify_dicom_value
+from .._functions import textify_dicom_value, is_anonymized_value
 from pydicom.dataelem import convert_raw_data_element
 import re, pydicom, logging
 from pydicom import datadict
@@ -72,6 +72,9 @@ class RegexValidator(Validator):
                 for v in value:
                     v = v.strip()
                     if not v: continue
+                    # Skip anonymized values (starts with "anon" or matches "Doe John" patterns)
+                    if is_anonymized_value(v):
+                        continue
                     _logger.debug(
                         '🫆 Class %s checking value «%s» for tag %s in %s',
                         self.__class__.__name__, v, self.tag, potential_file
@@ -118,8 +121,12 @@ class CaseInsensitiveAndWarningRegexValidator(RegexValidator):
         try:
             return super().validate(potential_file)
         except self._CaseMismatchError as ex:
+            # Skip anonymized values (starts with "anon" or matches "Doe John" patterns)
+            value = ex.args[0] if ex.args else ''
+            if is_anonymized_value(value):
+                return set()
             tag_name = datadict.keyword_for_tag(self.tag) if self.tag else 'unknown tag'
             return set([WarningFinding(
-                file=potential_file, value=f'«{ex.args[0]}»', tag=self.tag,
+                file=potential_file, value=f'«{value}»', tag=self.tag,
                 description=f'{self.tag} Value for {tag_name} matches expected pattern but uses incorrect case; {self.description}'
             )])

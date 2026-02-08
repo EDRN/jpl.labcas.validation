@@ -10,7 +10,7 @@ https://docs.google.com/spreadsheets/d/1Q56vKzK0nB4UAkfLJnBOy6C-7wtHccvZkWYGQHTM
 from .._classes import Validator
 from .._files import PotentialFile
 from .._findings import ValidationFinding, WarningFinding
-from .._functions import textify_dicom_value
+from .._functions import textify_dicom_value, is_anonymized_value
 from ._base import RegexValidator, DICOMUIDValidator, YMDValidator, CaseInsensitiveAndWarningRegexValidator
 from pydicom.dataelem import convert_raw_data_element
 from collections.abc import Sequence
@@ -377,29 +377,35 @@ class ImageTypeValidator(Validator):
                 try:
                     values = elem.value.decode().split('\\')
                     if len(values) > 0:
-                        if values[0].strip().upper() not in ('ORIGINAL', 'DERIVED'):
-                            if values[0].strip() in ('original', 'derived'):
-                                findings.add(WarningFinding(
-                                    file=potential_file, value=values[0], tag=self.tag,
-                                    description=f'ImageType must start with "ORIGINAL" or "DERIVED" in ALL CAPS'
-                                ))
-                            else:
-                                findings.add(ValidationFinding(
-                                    file=potential_file, value=values[0], tag=self.tag,
-                                    description=f'ImageType must start with "ORIGINAL" or "DERIVED"'
-                                ))
-                        if len(values) > 1:
-                            if values[1].strip().upper() not in ('PRIMARY', 'SECONDARY'):
-                                if values[1].strip() in ('primary', 'secondary'):
+                        val0 = values[0].strip()
+                        # Skip anonymized values (starts with "anon" or matches "Doe John" patterns)
+                        if not is_anonymized_value(val0):
+                            if val0.upper() not in ('ORIGINAL', 'DERIVED'):
+                                if val0 in ('original', 'derived'):
                                     findings.add(WarningFinding(
-                                        file=potential_file, value=values[1], tag=self.tag,
-                                        description=f'ImageType must have a second string that is "PRIMARY" or "SECONDARY" in ALL CAPS'
+                                        file=potential_file, value=val0, tag=self.tag,
+                                        description=f'ImageType must start with "ORIGINAL" or "DERIVED" in ALL CAPS'
                                     ))
                                 else:
                                     findings.add(ValidationFinding(
-                                        file=potential_file, value=values[1], tag=self.tag,
-                                        description=f'ImageType must have a second string that is "PRIMARY" or "SECONDARY"'
+                                        file=potential_file, value=val0, tag=self.tag,
+                                        description=f'ImageType must start with "ORIGINAL" or "DERIVED"'
                                     ))
+                        if len(values) > 1:
+                            val1 = values[1].strip()
+                            # Skip anonymized values (starts with "anon" or matches "Doe John" patterns)
+                            if not is_anonymized_value(val1):
+                                if val1.upper() not in ('PRIMARY', 'SECONDARY'):
+                                    if val1 in ('primary', 'secondary'):
+                                        findings.add(WarningFinding(
+                                            file=potential_file, value=val1, tag=self.tag,
+                                            description=f'ImageType must have a second string that is "PRIMARY" or "SECONDARY" in ALL CAPS'
+                                        ))
+                                    else:
+                                        findings.add(ValidationFinding(
+                                            file=potential_file, value=val1, tag=self.tag,
+                                            description=f'ImageType must have a second string that is "PRIMARY" or "SECONDARY"'
+                                        ))
                 except Exception:
                     findings.add(ValidationFinding(
                         file=potential_file, value='Non-text', tag=self.tag, description=f'ImageType has non-text values'

@@ -67,6 +67,44 @@ def check_directory(target: str):
     raise DirectoryError(f'🫙 No valid DICOM files found in {target}')
 
 
+def is_anonymized_value(s: str) -> bool:
+    '''Check if a value should be considered anonymized and skipped.
+    
+    Returns True if the value:
+    - Starts with "anon" (case-insensitive), OR
+    - Matches "Doe John", "Doe^John", "John Doe", or "John^Doe" (case-insensitive)
+    '''
+    if not s:
+        return False
+    s_stripped = s.strip()
+    if not s_stripped:
+        return False
+    
+    s_lower = s_stripped.lower()
+    
+    # Check if starts with "anon"
+    if s_lower.startswith('anon'):
+        return True
+    
+    # Check for "Doe John" patterns (case-insensitive)
+    # Match: "Doe John", "Doe^John", "John Doe", "John^Doe"
+    # Also handle trailing carets/spaces and multiple carets
+    normalized = s_stripped.rstrip('^').strip()
+    normalized_lower = normalized.lower()
+    
+    # Check exact matches for common patterns
+    if normalized_lower in ('doe john', 'john doe', 'doe^john', 'john^doe'):
+        return True
+    
+    # Check if it matches the pattern with optional spaces/carets
+    # Pattern: (Doe|John) followed by (space or ^) followed by (John|Doe)
+    doe_john_pattern = re.compile(r'^(doe|john)[\s\^]+(john|doe)', re.IGNORECASE)
+    if doe_john_pattern.match(normalized):
+        return True
+    
+    return False
+
+
 def textify_dicom_value(value: any) -> list[str]:
     '''Textify the given value.
     
