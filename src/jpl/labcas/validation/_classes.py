@@ -207,15 +207,15 @@ class Report:
                             'index_val': index_val
                         })
                     
-                    # Process each event for this site
-                    for event_id in sorted(event_file_findings.keys()):
-                        # Write CSV file for this site_id-event_id combination
-                        output_file = os.path.join(output_directory, f'{site_id}-{event_id}.csv')
-                        _logger.info('Processing event ID %s and opening file %s', event_id, output_file)
-                        with open(output_file, 'w', newline='') as io:
-                            writer = csv.writer(io)
-                            writer.writerow(_header)
-                            
+                    # Write single CSV file for this site_id (all events combined)
+                    output_file = os.path.join(output_directory, f'{site_id}.csv')
+                    _logger.info('Opening file %s for site ID %s', output_file, site_id)
+                    with open(output_file, 'w', newline='') as io:
+                        writer = csv.writer(io)
+                        writer.writerow(_header)
+                        
+                        # Process all events for this site
+                        for event_id in sorted(event_file_findings.keys()):
                             file_findings = event_file_findings[event_id]
                             for file_path, finding_types in sorted(file_findings.items()):
                                 file_name = os.path.basename(file_path)
@@ -257,14 +257,14 @@ class Report:
             _logger.info('Using in-memory findings list')
             organized = self._organize_report()
             for site_id, event_ids in organized.items():
-                # Process all events for this site
-                for event_id in sorted(event_ids.keys()):
-                    # Write CSV file for this site_id-event_id combination
-                    output_file = os.path.join(output_directory, f'{site_id}-{event_id}.csv')
-                    _logger.info('Processing event ID %s and opening file %s', event_id, output_file)
-                    with open(output_file, 'w', newline='') as io:
-                        writer = csv.writer(io)
-                        writer.writerow(_header)
+                # Write single CSV file for this site_id (all events combined)
+                output_file = os.path.join(output_directory, f'{site_id}.csv')
+                _logger.info('Opening file %s for site ID %s', output_file, site_id)
+                with open(output_file, 'w', newline='') as io:
+                    writer = csv.writer(io)
+                    writer.writerow(_header)
+                    # Process all events for this site
+                    for event_id in sorted(event_ids.keys()):
                         file_names = event_ids[event_id]
                         for file_name, findings in sorted(file_names.items()):
                             kinds = sorted(list(set([f.kind() for f in findings])))
