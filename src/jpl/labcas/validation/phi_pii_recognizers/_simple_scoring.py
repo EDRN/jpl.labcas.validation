@@ -540,12 +540,14 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
             # Gather all the text candidates from the value
             candidates: list[str] = self._textify(value)
 
+            # Initialize tag_keyword for this iteration
+            tag_keyword = datadict.keyword_for_tag(t) or ''
+
             # Skip institution names if we're suppressing them
             if self._suppress_institution_names and (t.group, t.element) == (0x0008, 0x0080): continue
 
             # Auto-flag truly risky tags and only when we have real text
             if (t.group, t.element) in self._strict_tags:
-                # tag_keyword already retrieved above
                 for c in candidates:
                     c = c.strip()
                     # Skip anonymized values (starts with "anon" or matches "Doe John" patterns)
