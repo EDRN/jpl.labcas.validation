@@ -296,12 +296,54 @@ class WindowWidthValidator(RegexValidator):
         return findings
 
 
-class PixelSpacingValidator(RegexValidator):
+class PixelSpacingValidator(Validator):
     '''A validator that checks the PixelSpacing tag.'''
 
-    description = 'PixelSpacing must be a pair of positive numers' 
+    description = 'PixelSpacing must be a pair of positive floating point numbers'
     tag = pydicom.tag.Tag((0x0028, 0x0030))
-    regex = re.compile(r'^\[(\d+\.\d+|[1-9]\d*),\s+(\d+\.\d+|[1-9]\d*)\]$')
+
+    def validate(self, potential_file: PotentialFile) -> set[ValidationFinding]:
+        '''Validate that PixelSpacing has exactly two positive floats (e.g. decimal or scientific notation).'''
+        findings: set[ValidationFinding] = set()
+        ds = potential_file.dcmread(stop_before_pixels=True, force=False)
+        elem = ds.get_item(self.tag)
+        if elem is None:
+            findings.add(ValidationFinding(
+                file=potential_file, value='tag missing', tag=self.tag,
+                description='PixelSpacing tag is missing'
+            ))
+            return findings
+        elem = convert_raw_data_element(elem)
+        value = elem.value
+        if value is None:
+            findings.add(ValidationFinding(
+                file=potential_file, value='value missing', tag=self.tag,
+                description='PixelSpacing tag has no value'
+            ))
+            return findings
+        values_iter = [value] if (isinstance(value, str) or not isinstance(value, Sequence)) else list(value)
+        if len(values_iter) != 2:
+            findings.add(ValidationFinding(
+                file=potential_file, value=value, tag=self.tag,
+                description=f'PixelSpacing must be exactly two values (got {len(values_iter)})'
+            ))
+            return findings
+        for i, v in enumerate(values_iter):
+            try:
+                n = float(v)
+            except (ValueError, TypeError):
+                findings.add(ValidationFinding(
+                    file=potential_file, value=value, tag=self.tag,
+                    description=f'PixelSpacing value {i + 1} must be a floating point number (decimal or scientific notation)'
+                ))
+                return findings
+            if n <= 0:
+                findings.add(ValidationFinding(
+                    file=potential_file, value=value, tag=self.tag,
+                    description=f'PixelSpacing values must be positive (value {i + 1} is {n})'
+                ))
+                return findings
+        return findings
 
 
 class ImagePositionPatientValidator(RegexValidator):
