@@ -27,7 +27,7 @@ to get the summary.
 from ._argparse import add_standard_argparse_options
 from ._classes import Report
 from ._files import PotentialFile
-from ._findings import Finding, ErrorFinding, WarningFinding
+from ._findings import Finding, ErrorFinding
 from ._profiles import get_profile, ProfileName
 from ._functions import check_directory, iterate_paths
 from .const import PHI_PII_THRESHOLD
@@ -112,13 +112,16 @@ def _scan_one(potential_file: PotentialFile) -> int | list[Finding]:
     try:
         # Short circuit: if the profile is Generic or NULL, skip full validation and report as warning
         # (profile_name is a property that always resolves to a ProfileName, so None only before first access)
-        if potential_file.profile_name is None or potential_file.profile_name in (ProfileName.GENERIC, ProfileName.NULL):
+        if potential_file.profile_name is None or potential_file.profile_name in (ProfileName.GENERIC, ProfileName.NULL, ProfileName.MISSING_IMAGE_TYPE):
             _logger.warning('🤷 Skipping file %s because it does not have a recognized profile', potential_file)
-            findings = [WarningFinding(
+            message = 'Skipping file because it does not have a recognized profile — FAIL!'
+            if potential_file.profile_name == ProfileName.MISSING_IMAGE_TYPE:
+                message += ' — note: it has a recognized SOPClassUID but no ImageType value, which is still FAIL!'
+            findings = [ErrorFinding(
                 file=potential_file,
-                value='No valid profile found for file',
-                score=0.0,
-                description='Skipping file because it does not have a recognized profile'
+                value='FAIL! No valid profile found for file',
+                score=1.0,
+                error_message=message
             )]
         else:
             findings: set[Finding] = set()
