@@ -135,6 +135,7 @@ class PotentialFile:
             return None
 
     _special_image_types = set[str](['localizer', 'scout', 'survey', 'surview', 'top', 'topogram', 'scanogram'])
+    _derived_image_types = set[str](['derived', 'reformatted', 'mpr', 'mip', 'minip', 'average', 'subtracted', 'projection'])
 
     def _determine_profile_name(self, ds: pydicom.Dataset):
         from ._profiles import ProfileName
@@ -144,6 +145,8 @@ class PotentialFile:
         if sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.2'):
             if self._special_image_types.intersection(image_type):
                 return ProfileName.CT_LOC
+            elif self._derived_image_types.intersection(image_type):
+                return ProfileName.CT_DER
             elif len(image_type) == 0:
                 return ProfileName.MISSING_IMAGE_TYPE
             else:
@@ -151,6 +154,8 @@ class PotentialFile:
         elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.4'):
             if self._special_image_types.intersection(image_type):
                 return ProfileName.MR_LOC
+            elif self._derived_image_types.intersection(image_type):
+                return ProfileName.MR_DER
             elif len(image_type) == 0:
                 return ProfileName.MISSING_IMAGE_TYPE
             else:
