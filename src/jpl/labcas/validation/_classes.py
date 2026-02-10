@@ -3,7 +3,7 @@
 '''🛂 EDRN DICOM Validation: classes.'''
 
 from __future__ import annotations
-from ._findings import Finding
+from ._findings import Finding, WarningFinding, ErrorFinding
 from functools import lru_cache
 from dataclasses import dataclass
 from typing import ClassVar, Optional
@@ -171,11 +171,11 @@ class Report:
             _logger.info('Opening database at %s for reading', self.db_path)
             conn = sqlite3.connect(self.db_path, timeout=30.0)
             try:
-                # Get all unique site_ids
+                # Get all unique site_ids (include Warning/Error findings regardless of score)
                 cursor = conn.execute('''
                     SELECT DISTINCT site_id 
                     FROM findings 
-                    WHERE score >= ?
+                    WHERE finding_type IN ('WarningFinding', 'ErrorFinding') OR score >= ?
                     ORDER BY site_id
                 ''', (self.score,))
                 
@@ -184,11 +184,11 @@ class Report:
 
                 for site_id in site_ids:
                     _logger.info('Processing site ID %s', site_id)
-                    # Get all findings for this site (all events), grouped by file
+                    # Get all findings for this site (all events), grouped by file (include Warning/Error regardless of score)
                     cursor = conn.execute('''
                         SELECT event_id, file_path, file_name, finding_type, value, score, tag, description, pattern, index_val
                         FROM findings
-                        WHERE site_id = ? AND score >= ?
+                        WHERE site_id = ? AND (finding_type IN ('WarningFinding', 'ErrorFinding') OR score >= ?)
                         ORDER BY event_id, file_path, finding_type, score DESC
                     ''', (site_id, self.score))
                     
@@ -269,8 +269,12 @@ class Report:
                         for file_name, findings in sorted(file_names.items()):
                             kinds = sorted(list(set([f.kind() for f in findings])))
                             for kind in kinds:
+                                # Include warnings and errors regardless of score; others must meet threshold
+                                meets_threshold = lambda f: f.kind() == kind and (
+                                    isinstance(f, (WarningFinding, ErrorFinding)) or f.score >= self.score
+                                )
                                 scored_findings = sorted(
-                                    [f for f in findings if f.score >= self.score and f.kind() == kind],
+                                    [f for f in findings if meets_threshold(f)],
                                     key=lambda x: x.score, reverse=True
                                 )
                                 if len(scored_findings) > 0:
