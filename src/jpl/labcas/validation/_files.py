@@ -144,11 +144,15 @@ class PotentialFile:
         if sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.2'):
             if self._special_image_types.intersection(image_type):
                 return ProfileName.CT_LOC
+            elif len(image_type) == 0:
+                return ProfileName.MISSING_IMAGE_TYPE
             else:
                 return ProfileName.CT_STD
         elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.4'):
             if self._special_image_types.intersection(image_type):
                 return ProfileName.MR_LOC
+            elif len(image_type) == 0:
+                return ProfileName.MISSING_IMAGE_TYPE
             else:
                 return ProfileName.MR_STD
         elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.128'):

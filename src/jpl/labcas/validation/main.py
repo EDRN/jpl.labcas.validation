@@ -27,8 +27,8 @@ to get the summary.
 from ._argparse import add_standard_argparse_options
 from ._classes import Report
 from ._files import PotentialFile
-from ._findings import Finding
-from ._profiles import get_profile
+from ._findings import Finding, ErrorFinding
+from ._profiles import get_profile, ProfileName
 from ._functions import check_directory, iterate_paths
 from .const import PHI_PII_THRESHOLD
 from .phi_pii_recognizers import PHI_PII_RECOGNIZERS, DEFAULT_PHI_PII_RECOGNIZER
@@ -110,14 +110,27 @@ def _scan_one(potential_file: PotentialFile) -> int | list[Finding]:
         - If db_path is None: list of Finding objects (for single-process mode)
     '''
     try:
-        # We need the pixel data because we also do OCR to see if there's PHI/PII burnt into the image
-        findings: set[Finding] = set()
-        findings.update(_recognizer.recognize(potential_file))
+        # Short circuit: if the profile is Generic or NULL, skip full validation and report as warning
+        # (profile_name is a property that always resolves to a ProfileName, so None only before first access)
+        if potential_file.profile_name is None or potential_file.profile_name in (ProfileName.GENERIC, ProfileName.NULL, ProfileName.MISSING_IMAGE_TYPE):
+            _logger.warning('🤷 Skipping file %s because it does not have a recognized profile', potential_file)
+            message = 'Skipping file because it does not have a recognized profile — FAIL!'
+            if potential_file.profile_name == ProfileName.MISSING_IMAGE_TYPE:
+                message += ' — note: it has a recognized SOPClassUID but no ImageType value, which is still FAIL!'
+            findings = [ErrorFinding(
+                file=potential_file,
+                value='FAIL! No valid profile found for file',
+                score=1.0,
+                error_message=message
+            )]
+        else:
+            findings: set[Finding] = set()
+            findings.update(_recognizer.recognize(potential_file))
 
-        # And now to validate the tags against a chosen profile of validators
-        profile = get_profile(potential_file.profile_name)
-        findings.update(profile.validate(potential_file))        
-        findings = list(findings)
+            # And now to validate the tags against a chosen profile of validators
+            profile = get_profile(potential_file.profile_name)
+            findings.update(profile.validate(potential_file))        
+            findings = list(findings)
 
         if _db_path is None:
             # Single-process mode: return findings directly
@@ -177,7 +190,7 @@ def _create_findings_db(db_path: str):
 
 def _load_findings_from_db(db_path: str) -> list[Finding]:
     '''Load all findings from the database and reconstruct Finding objects.'''
-    from ._findings import ErrorFinding, ValidationFinding, HeaderFinding, ImageFinding
+    from ._findings import ErrorFinding, ValidationFinding, HeaderFinding, ImageFinding, WarningFinding
     from ._files import PotentialFile
     from pydicom.tag import Tag
     
@@ -216,6 +229,8 @@ def _load_findings_from_db(db_path: str) -> list[Finding]:
                 finding = HeaderFinding(file=potential_file, value=value, score=score, tag=tag_obj, description=description)
             elif finding_type == 'ImageFinding':
                 finding = ImageFinding(file=potential_file, value=value, score=score, pattern=pattern or 'unknown', index=index_val or -1)
+            elif finding_type == 'WarningFinding':
+                finding = WarningFinding(file=potential_file, value=value, score=score, tag=tag_obj, description=description)
             else:
                 # Unknown finding type - log warning and skip
                 _logger.warning('⚠️ Unknown finding type "%s" for file %s, skipping', finding_type, file_path)

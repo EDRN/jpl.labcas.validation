@@ -22,6 +22,7 @@ class ProfileName(Enum):
     SC      = 'Secondary capture'
     SEG     = 'Segmentation objects'
     GENERIC = 'Generic'
+    MISSING_IMAGE_TYPE = 'Missing ImageType'
 
 
 class Profile:
