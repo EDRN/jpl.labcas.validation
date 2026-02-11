@@ -3,6 +3,7 @@ name = 'jpl.labcas.validation'
 dynamic = ['version']
 requires-python = '>=3.11'
 dependencies = [
+    'humanize ~= 4.15.0',
     'pydicom ~= 3.0.1',
     'pytesseract ~= 0.3.13',
     'pylibjpeg[all] ~= 2.1.0',

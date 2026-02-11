@@ -17,6 +17,7 @@ class PotentialFile:
     site_id: str        # Blinded site ID
     event_id: str       # Event ID
     file_name: str      # File name
+    file_size: int      # File size in bytes
 
     # Regex for parsing organization parts from file paths
     _organization_re = re.compile(r'([^/]+)/(\d{7})/(.+)$')  # blah/blah/Images_site_XYX/1234567/f1/f2/…/file.dcm
@@ -24,6 +25,7 @@ class PotentialFile:
     def __init__(self, path: str, site_id: str = None, event_id: str = None):
         '''Initialize the potential file with the given file path and optional site and event IDs.'''
         self.path = path
+        self.file_size = os.path.getsize(path)
 
         search_result = self._organization_re.search(path)
         if search_result:
