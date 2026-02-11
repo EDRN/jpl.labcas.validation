@@ -30,12 +30,12 @@ from ._files import PotentialFile
 from ._findings import Finding, ErrorFinding
 from ._profiles import get_profile, ProfileName
 from ._functions import check_directory, iterate_paths
-from .const import PHI_PII_THRESHOLD
+from .const import PHI_PII_THRESHOLD, MINIMUM_FILE_SIZE
 from .phi_pii_recognizers import PHI_PII_RECOGNIZERS, DEFAULT_PHI_PII_RECOGNIZER
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count
 from typing import Iterable
-import argparse, sys, logging, os, pydicom, pysolr, os.path, tempfile, sqlite3, threading, traceback
+import argparse, sys, logging, os, pydicom, pysolr, os.path, tempfile, sqlite3, threading, traceback, humanize
 
 
 __doc__ = '🛂 EDRN DICOM Validation: check for PHI/PII and compliance with EDRN core and MR requirements for DICOM tags'
@@ -110,9 +110,19 @@ def _scan_one(potential_file: PotentialFile) -> int | list[Finding]:
         - If db_path is None: list of Finding objects (for single-process mode)
     '''
     try:
-        # Short circuit: if the profile is Generic or NULL, skip full validation and report as warning
-        # (profile_name is a property that always resolves to a ProfileName, so None only before first access)
-        if potential_file.profile_name is None or potential_file.profile_name in (ProfileName.GENERIC, ProfileName.NULL, ProfileName.MISSING_IMAGE_TYPE):
+        if potential_file.file_size < MINIMUM_FILE_SIZE:
+            # File size heuristic: if the file isn't unexpectedly small, skip it
+            _logger.warning('🤷 Skipping file %s because it is unexpectedly small', potential_file)
+            humanized = humanize.naturalsize(potential_file.file_size)
+            findings = [ErrorFinding(
+                file=potential_file,
+                value=f'FAIL! File is unexpectedly small ({humanized})',
+                score=1.0,
+                error_message=f'Skipping file because it is unexpectedly small; file size is {potential_file.file_size} bytes but require a minimum of {MINIMUM_FILE_SIZE} bytes'
+            )]
+        elif potential_file.profile_name is None or potential_file.profile_name in (ProfileName.GENERIC, ProfileName.NULL, ProfileName.MISSING_IMAGE_TYPE):
+            # Short circuit: if the profile is Generic or NULL, skip full validation and report as warning
+            # (profile_name is a property that always resolves to a ProfileName, so None only before first access)
             _logger.warning('🤷 Skipping file %s because it does not have a recognized profile', potential_file)
             message = 'Skipping file because it does not have a recognized profile — FAIL!'
             if potential_file.profile_name == ProfileName.MISSING_IMAGE_TYPE:
@@ -124,6 +134,7 @@ def _scan_one(potential_file: PotentialFile) -> int | list[Finding]:
                 error_message=message
             )]
         else:
+            # Okay, full validation time
             findings: set[Finding] = set()
             findings.update(_recognizer.recognize(potential_file))
 

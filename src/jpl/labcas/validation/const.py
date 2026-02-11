@@ -11,3 +11,6 @@ IGNORED_FILES = {'.DS_Store', 'Thumbs.db', 'desktop.ini', 'DICOMDIR', 'DICOMDIR.
 
 # Folders whose contents we can skip completely
 IGNORED_FOLDERS = {'thumbnails'}
+
+# Minimum file size to be considered for validation, 25 KB
+MINIMUM_FILE_SIZE = 25 * 1024
