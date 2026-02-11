@@ -346,12 +346,48 @@ class PixelSpacingValidator(Validator):
         return findings
 
 
-class ImagePositionPatientValidator(RegexValidator):
+class ImagePositionPatientValidator(Validator):
     '''A validator that checks the ImagePositionPatient tag.'''
 
-    description = 'ImagePositionPatient must be a triplet of numbers'
+    description = 'ImagePositionPatient must be a triplet of floating point numbers'
     tag = pydicom.tag.Tag((0x0020, 0x0032))
-    regex = re.compile(r'^\[-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?\]$')
+
+    def validate(self, potential_file: PotentialFile) -> set[ValidationFinding]:
+        '''Validate that ImagePositionPatient has exactly three floats (e.g. decimal or scientific notation).'''
+        findings: set[ValidationFinding] = set()
+        ds = potential_file.dcmread(stop_before_pixels=True, force=False)
+        elem = ds.get_item(self.tag)
+        if elem is None:
+            findings.add(ValidationFinding(
+                file=potential_file, value='tag missing', tag=self.tag,
+                description='ImagePositionPatient tag is missing'
+            ))
+            return findings
+        elem = convert_raw_data_element(elem)
+        value = elem.value
+        if value is None:
+            findings.add(ValidationFinding(
+                file=potential_file, value='value missing', tag=self.tag,
+                description='ImagePositionPatient tag has no value'
+            ))
+            return findings
+        values_iter = [value] if (isinstance(value, str) or not isinstance(value, Sequence)) else list(value)
+        if len(values_iter) != 3:
+            findings.add(ValidationFinding(
+                file=potential_file, value=value, tag=self.tag,
+                description=f'ImagePositionPatient must be exactly three values (got {len(values_iter)})'
+            ))
+            return findings
+        for i, v in enumerate(values_iter):
+            try:
+                float(v)
+            except (ValueError, TypeError):
+                findings.add(ValidationFinding(
+                    file=potential_file, value=value, tag=self.tag,
+                    description=f'ImagePositionPatient value {i + 1} must be a floating point number (decimal or scientific notation)'
+                ))
+                return findings
+        return findings
 
 
 class ImageOrientationPatientValidator(Validator):

@@ -1,6 +1,15 @@
 # encoding: utf-8
 
-'''🛂 EDRN DICOM Validation: profiles.'''
+'''🛂 EDRN DICOM Validation: profiles.
+
+These valdation profiles are defined in "the spreadsheet", specifically the "SOP Class UID Routing" tab
+to determine which sets of validators go where, and then the "CORE DICOM TAGS (MR & CT)" tab that
+actually defines the validators themselves.
+
+See:
+
+https://docs.google.com/spreadsheets/d/1PMhUL_4aLE89G98KM_cDGJKaIcuMEEYWeIQSxY5d6yY/edit?gid=1779958583#gid=1779958583
+'''
 
 from enum import Enum
 from ._classes import Validator
@@ -19,6 +28,8 @@ class ProfileName(Enum):
     MR_LOC  = 'MR localizer'
     MR_STD  = 'MR standard'
     PET_STD = 'PET standard'
+    CT_DER  = 'CT derived or post-processed'
+    MR_DER  = 'MR derived or post-processed'
     SC      = 'Secondary capture'
     SEG     = 'Segmentation objects'
     GENERIC = 'Generic'
@@ -74,7 +85,7 @@ PROFILES: dict[ProfileName, Profile] = {}
 from . import validators
 register_profile(Profile(ProfileName.NULL, [], []))
 
-# For CT_STD, MR_STD, and PET_STD the validators are the same and they're all required, so
+# For CT_STD and  MR_STD the validators are the same and they're all required, so
 # let's collect them here in a single list and use them for all these profiles.
 _all_required_validators = [
     validators.SOPClassUIDValidator(),
@@ -156,6 +167,43 @@ _optional_loc_validators = [
 
 register_profile(Profile(ProfileName.CT_LOC, _required_loc_validators, _optional_loc_validators,))
 register_profile(Profile(ProfileName.MR_LOC, _required_loc_validators, _optional_loc_validators,))
+
+# PET_STD is similar to CT_STD and MR_STD … but has 3 different optional validators
+register_profile(Profile(ProfileName.PET_STD, [
+    validators.SOPClassUIDValidator(),
+    validators.ModalityValidator(),
+    validators.ImageTypeValidator(),
+    validators.SeriesDescriptionValidator(),
+    validators.FrameOfReferenceUIDValidator(),
+    validators.StudyInstanceUIDValidator(),
+    validators.SeriesInstanceUIDValidator(),
+    validators.SOPInstanceUIDValidator(),
+    validators.SeriesNumberValidator(),
+    validators.InstanceNumberValidator(),
+    validators.ManufacturerValidator(),
+    validators.ModelNameValidator(),
+    validators.SoftwareVersionsValidator(),
+    validators.StudyDateValidator(),
+    validators.ContentDateValidator(),
+    validators.AcquisitionDateValidator(),
+    validators.AcquisitionTimeValidator(),
+    validators.ContentTimeValidator(),
+    validators.RowsValidator(),
+    validators.ColumnsValidator(),
+    validators.BitsAllocatedValidator(),
+    validators.BitsStoredValidator(),
+    validators.HighBitValidator(),
+    validators.PixelRepresentationValidator(),
+    validators.PhotometricInterpretationValidator(),
+    validators.PixelSpacingValidator(),
+    validators.ImagePositionPatientValidator(),
+    validators.ImageOrientationPatientValidator(),
+], [
+    validators.WindowCenterValidator(),
+    validators.WindowWidthValidator(),
+    validators.SliceThicknessValidator(),
+]))
+
 
 # "Segmentation objects", whatever these are
 register_profile(Profile(ProfileName.SEG, [
@@ -252,3 +300,46 @@ register_profile(Profile(ProfileName.GENERIC, [
     validators.ImagePositionPatientValidator(),
     validators.ImageOrientationPatientValidator(),
 ]))
+
+
+# Derrrr-profiles; from "the spreadsheet", these are identical to each other,
+# so we'll collect the validators once and then register them for both der profiles.
+
+_required_der_validators = [
+    validators.SOPClassUIDValidator(),
+    validators.ModalityValidator(),
+    validators.ImageTypeValidator(),
+    validators.SeriesDescriptionValidator(),
+    validators.FrameOfReferenceUIDValidator(),
+    validators.StudyInstanceUIDValidator(),
+    validators.SeriesInstanceUIDValidator(),
+    validators.SOPInstanceUIDValidator(),
+    validators.SeriesNumberValidator(),
+    validators.InstanceNumberValidator(),
+    validators.ManufacturerValidator(),
+    validators.ModelNameValidator(),
+    validators.SoftwareVersionsValidator(),
+    validators.StudyDateValidator(),
+    validators.ContentDateValidator(),
+    validators.AcquisitionDateValidator(),
+    validators.AcquisitionTimeValidator(),
+    validators.ContentTimeValidator(),
+    validators.RowsValidator(),
+    validators.ColumnsValidator(),
+    validators.BitsAllocatedValidator(),
+    validators.BitsStoredValidator(),
+    validators.HighBitValidator(),
+    validators.PixelRepresentationValidator(),
+    validators.PhotometricInterpretationValidator(),
+]
+_optional_der_validators = [
+    validators.WindowCenterValidator(),
+    validators.WindowWidthValidator(),
+    validators.SliceThicknessValidator(),
+    validators.PixelSpacingValidator(),
+    validators.ImagePositionPatientValidator(),
+    validators.ImageOrientationPatientValidator(),
+]
+
+register_profile(Profile(ProfileName.CT_DER, _required_der_validators, _optional_der_validators))
+register_profile(Profile(ProfileName.MR_DER, _required_der_validators, _optional_der_validators))
