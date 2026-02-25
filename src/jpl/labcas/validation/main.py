@@ -33,7 +33,7 @@ from ._functions import check_directory, iterate_paths
 from .const import PHI_PII_THRESHOLD, MINIMUM_FILE_SIZE
 from .phi_pii_recognizers import PHI_PII_RECOGNIZERS, DEFAULT_PHI_PII_RECOGNIZER
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from multiprocessing import cpu_count
+from multiprocessing import cpu_count, Manager
 from typing import Iterable
 import argparse, sys, logging, os, pydicom, pysolr, os.path, tempfile, sqlite3, threading, traceback, humanize
 
@@ -44,7 +44,7 @@ __license__ = 'Apache 2.0'
 _recognizer = None  # The one recognizer we'll need for all workers for all files
 _logger = logging.getLogger(__name__)
 _db_path = None  # Path to SQLite database for storing findings
-_db_lock = None  # Lock for database access (per-process)
+_db_lock = None  # Lock for database access (thread lock in single-process; shared process lock in multi-process)
 
 
 def _score_type(value: str) -> float:
@@ -58,20 +58,21 @@ def _score_type(value: str) -> float:
         raise argparse.ArgumentTypeError(f'{value} is not a valid floating point number')
 
 
-def _init_worker(recognizer_name: str, recognizer_args: dict, db_path: str = None):
+def _init_worker(recognizer_name: str, recognizer_args: dict, db_path: str = None, db_write_lock=None):
     '''Initialize the worker by instantiating the global recognizer by name and its needed arguments.
     
     Args:
         recognizer_name: Name of the recognizer to use
         recognizer_args: Dictionary of arguments for the recognizer
         db_path: Optional path to SQLite database (None for single-process mode)
+        db_write_lock: Optional shared lock for serializing DB writes across processes (required when db_path is set)
     '''
     global _recognizer, _db_path, _db_lock
     # Configure logging for this worker process to match the parent process
     logging.basicConfig(level=recognizer_args.get('loglevel', logging.INFO), format='%(levelname)s %(message)s')
     _recognizer = PHI_PII_RECOGNIZERS[recognizer_name](argparse.Namespace(**recognizer_args))
     _db_path = db_path
-    _db_lock = threading.Lock() if db_path else None  # Only need lock if using database
+    _db_lock = db_write_lock if db_path else None  # Shared cross-process lock when using database
 
 
 def _write_finding_to_db(conn: sqlite3.Connection, finding: Finding):
@@ -149,10 +150,11 @@ def _scan_one(potential_file: PotentialFile) -> int | list[Finding]:
         
         # Multi-process mode: write findings to database
         if findings:
-            # Each process gets its own connection (SQLite handles concurrency well with separate connections)
-            with _db_lock:  # Lock for thread-safety within this process
+            # Serialize writes across all worker processes so only one writes at a time
+            with _db_lock:
                 conn = sqlite3.connect(_db_path, timeout=30.0)
                 try:
+                    conn.execute('PRAGMA journal_mode=WAL')
                     for finding in findings:
                         _write_finding_to_db(conn, finding)
                     conn.commit()
@@ -194,6 +196,7 @@ def _create_findings_db(db_path: str):
         ''')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_file_path ON findings(file_path)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_site_event ON findings(site_id, event_id)')
+        conn.execute('PRAGMA journal_mode=WAL')
         conn.commit()
     finally:
         conn.close()
@@ -278,31 +281,34 @@ def validate_pool(
     # Create the database schema
     _create_findings_db(db_path)
     
-    try:
-        with ProcessPoolExecutor(
-            max_workers=concurrency,
-            initializer=_init_worker,
-            initargs=(recognizer_name, args_dict, db_path),
-        ) as executor:
-            futures = (executor.submit(_scan_one, p) for p in file_generator())
-            total_findings = 0
-            try:
-                for future in as_completed(futures, timeout=None):
-                    count = future.result()
-                    total_findings += count
-            except KeyboardInterrupt:
-                # executor will clean up children on context exit
-                pass
-        
-        _logger.info('📊 Processed %d findings, stored in database', total_findings)
-        return db_path, total_findings
-    except Exception as ex:
-        # Clean up database on error
+    # Shared lock so only one worker writes to SQLite at a time (avoids "database is locked")
+    with Manager() as manager:
+        db_write_lock = manager.Lock()
         try:
-            os.remove(db_path)
-        except:
-            pass
-        raise
+            with ProcessPoolExecutor(
+                max_workers=concurrency,
+                initializer=_init_worker,
+                initargs=(recognizer_name, args_dict, db_path, db_write_lock),
+            ) as executor:
+                futures = (executor.submit(_scan_one, p) for p in file_generator())
+                total_findings = 0
+                try:
+                    for future in as_completed(futures, timeout=None):
+                        count = future.result()
+                        total_findings += count
+                except KeyboardInterrupt:
+                    # executor will clean up children on context exit
+                    pass
+            
+            _logger.info('📊 Processed %d findings, stored in database', total_findings)
+            return db_path, total_findings
+        except Exception as ex:
+            # Clean up database on error
+            try:
+                os.remove(db_path)
+            except Exception:
+                pass
+            raise
 
 
 def validate_single(directory: str, recognizer_name: str, args: argparse.Namespace, file_generator) -> list[Finding]:
