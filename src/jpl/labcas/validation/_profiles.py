@@ -76,8 +76,8 @@ def register_profile(p: Profile):
 def get_profile(profile_name: ProfileName) -> Profile:
     global PROFILES
     if profile_name not in PROFILES:
-        _logger.warning('🤷 Unknown profile name «%s», falling back to generic profile', profile_name)
-        profile_name = ProfileName.GENERIC
+        _logger.warning('🤷 Unknown profile name «%s», falling back to CT_STD profile', profile_name)
+        profile_name = ProfileName.CT_STD
     return PROFILES[profile_name]
 
 PROFILES: dict[ProfileName, Profile] = {}

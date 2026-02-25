@@ -169,7 +169,7 @@ class PotentialFile:
         elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.66.4'):
             return ProfileName.SEG
 
-        return ProfileName.GENERIC
+        return ProfileName.CT_STD
 
     @property
     def profile_name(self) -> str | None:
@@ -181,10 +181,10 @@ class PotentialFile:
                 del ds
             except Exception as ex:
                 _logger.error(
-                    '💥 Unexpected exception reading %s to determine its profile, falling back to generic: %s',
+                    '💥 Unexpected exception reading %s to determine its profile, falling back to CT_STD: %s',
                     self.path, ex
                 )
-                self._profile_name = ProfileName.GENERIC
+                self._profile_name = ProfileName.CT_STD
         return self._profile_name
 
     def __repr__(self) -> str:
