@@ -5,6 +5,7 @@
 from .._classes import PHI_PII_Recognizer
 from .._files import PotentialFile
 from .._findings import Finding, HeaderFinding, ImageFinding, ErrorFinding
+from .._functions import is_anonymized_value
 from ..const import IMAGE_SCORE
 from collections import Counter
 from PIL import Image
@@ -512,6 +513,9 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
                     c_normalized = c.rstrip('^')
                     if any(rx.match(c_normalized) or rx.search(c_normalized) for rx in self._anonymized_patterns):
                         continue
+                    # @hoodriverheather's special extra set of anonymized values to skip
+                    # (starts with "anon" or matches "Doe John" patterns)
+                    if is_anonymized_value(c): continue
                     # Check for pattern matches
                     matched_key = None
                     for key, rx in self._patterns.items():

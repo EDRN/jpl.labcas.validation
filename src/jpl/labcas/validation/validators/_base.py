@@ -72,9 +72,6 @@ class RegexValidator(Validator):
                 for v in value:
                     v = v.strip()
                     if not v: continue
-                    # Skip anonymized values (starts with "anon" or matches "Doe John" patterns)
-                    if is_anonymized_value(v):
-                        continue
                     _logger.debug(
                         '🫆 Class %s checking value «%s» for tag %s in %s',
                         self.__class__.__name__, v, self.tag, potential_file

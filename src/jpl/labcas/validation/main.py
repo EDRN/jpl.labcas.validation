@@ -111,7 +111,7 @@ def _scan_one(potential_file: PotentialFile) -> int | list[Finding]:
         - If db_path is None: list of Finding objects (for single-process mode)
     '''
     try:
-        if potential_file.profile_name is None or potential_file.profile_name in (ProfileName.GENERIC, ProfileName.NULL, ProfileName.MISSING_IMAGE_TYPE):
+        if potential_file.profile_name is None or potential_file.profile_name in (ProfileName.NULL, ProfileName.MISSING_IMAGE_TYPE):
             # Short circuit: not a recognized DICOM file (non-DICOM or unrecognized profile).
             # Do not add to report — we want only DICOM files in the report.
             # Do not check file size here — that applies only to recognized DICOM files.
