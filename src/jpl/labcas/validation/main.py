@@ -111,8 +111,14 @@ def _scan_one(potential_file: PotentialFile) -> int | list[Finding]:
         - If db_path is None: list of Finding objects (for single-process mode)
     '''
     try:
-        if potential_file.file_size < MINIMUM_FILE_SIZE:
-            # File size heuristic: if the file isn't unexpectedly small, skip it
+        if potential_file.profile_name is None or potential_file.profile_name in (ProfileName.GENERIC, ProfileName.NULL, ProfileName.MISSING_IMAGE_TYPE):
+            # Short circuit: not a recognized DICOM file (non-DICOM or unrecognized profile).
+            # Do not add to report — we want only DICOM files in the report.
+            # Do not check file size here — that applies only to recognized DICOM files.
+            _logger.warning('🤷 Skipping file %s because it does not have a recognized profile (excluding from report)', potential_file)
+            findings = []
+        elif potential_file.file_size < MINIMUM_FILE_SIZE:
+            # File size heuristic: only for recognized DICOM files; non-DICOM files are handled above
             _logger.warning('🤷 Skipping file %s because it is unexpectedly small', potential_file)
             humanized = humanize.naturalsize(potential_file.file_size)
             findings = [ErrorFinding(
@@ -120,19 +126,6 @@ def _scan_one(potential_file: PotentialFile) -> int | list[Finding]:
                 value=f'FAIL! File is unexpectedly small ({humanized})',
                 score=1.0,
                 error_message=f'Skipping file because it is unexpectedly small; file size is {potential_file.file_size} bytes but require a minimum of {MINIMUM_FILE_SIZE} bytes'
-            )]
-        elif potential_file.profile_name is None or potential_file.profile_name in (ProfileName.GENERIC, ProfileName.NULL, ProfileName.MISSING_IMAGE_TYPE):
-            # Short circuit: if the profile is Generic or NULL, skip full validation and report as warning
-            # (profile_name is a property that always resolves to a ProfileName, so None only before first access)
-            _logger.warning('🤷 Skipping file %s because it does not have a recognized profile', potential_file)
-            message = 'Skipping file because it does not have a recognized profile — FAIL!'
-            if potential_file.profile_name == ProfileName.MISSING_IMAGE_TYPE:
-                message += ' — note: it has a recognized SOPClassUID but no ImageType value, which is still FAIL!'
-            findings = [ErrorFinding(
-                file=potential_file,
-                value='FAIL! No valid profile found for file',
-                score=1.0,
-                error_message=message
             )]
         else:
             # Okay, full validation time
