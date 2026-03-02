@@ -250,6 +250,7 @@ register_profile(Profile(ProfileName.SC, [
     validators.PixelRepresentationValidator(),
     validators.PhotometricInterpretationValidator(),    
     validators.WindowCenterValidator(),
+    validators.WindowWidthValidator(),
 ], [
     validators.ImageTypeValidator(),
     validators.SeriesDescriptionValidator(),
