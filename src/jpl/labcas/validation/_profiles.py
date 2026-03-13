@@ -8,7 +8,7 @@ actually defines the validators themselves.
 
 See:
 
-https://docs.google.com/spreadsheets/d/1PMhUL_4aLE89G98KM_cDGJKaIcuMEEYWeIQSxY5d6yY/edit?gid=1779958583#gid=1779958583
+https://docs.google.com/spreadsheets/d/1oQB0EoeajxFagSrIzF_8hOIc6hbC9MiMvhbYLfr6vPQ/edit?pli=1&gid=1779958583#gid=1779958583
 '''
 
 from enum import Enum
@@ -22,17 +22,26 @@ _logger = logging.getLogger(__name__)
 
 class ProfileName(Enum):
     '''The name of a profile.'''
-    NULL    = 'null'
-    CT_LOC  = 'CT localizer'
-    CT_STD  = 'CT standard'
-    MR_LOC  = 'MR localizer'
-    MR_STD  = 'MR standard'
-    PET_STD = 'PET standard'
-    CT_DER  = 'CT derived or post-processed'
-    MR_DER  = 'MR derived or post-processed'
-    SC      = 'Secondary capture'
-    SEG     = 'Segmentation objects'
-    GENERIC = 'Generic'
+    NULL               = 'null'
+    CT_LOC             = 'CT localizer'
+    CT_LOC_NEW         = 'CT localizer (for new data)'
+    CT_STD             = 'CT standard'
+    CT_STD_NEW         = 'CT standard (for new data)'
+    MR_LOC             = 'MR localizer'
+    MR_LOC_NEW         = 'MR localizer (for new data)'
+    MR_STD             = 'MR standard'
+    MR_STD_NEW         = 'MR standard (for new data)'
+    PET_STD            = 'PET standard'
+    PET_STD_NEW        = 'PET standard (for new data)'
+    CT_DER             = 'CT derived or post-processed'
+    CT_DER_NEW         = 'CT derived or post-processed (for new data)'
+    MR_DER             = 'MR derived or post-processed'
+    MR_DER_NEW         = 'MR derived or post-processed (for new data)'
+    SC                 = 'Secondary capture'
+    SC_NEW             = 'Secondary capture (for new data)'
+    SEG                = 'Segmentation objects'
+    SEG_NEW            = 'Segmentation objects (for new data)'
+    GENERIC            = 'Generic'
     MISSING_IMAGE_TYPE = 'Missing ImageType'
 
 
@@ -85,9 +94,7 @@ PROFILES: dict[ProfileName, Profile] = {}
 from . import validators
 register_profile(Profile(ProfileName.NULL, [], []))
 
-# For CT_STD and  MR_STD the validators are the same and they're all required, so
-# let's collect them here in a single list and use them for all these profiles.
-_all_required_validators = [
+_all_ct_required_validators = [
     validators.SOPClassUIDValidator(),
     validators.ModalityValidator(),
     validators.ImageTypeValidator(),
@@ -98,12 +105,14 @@ _all_required_validators = [
     validators.SOPInstanceUIDValidator(),
     validators.SeriesNumberValidator(),
     validators.InstanceNumberValidator(),
-    validators.ManufacturerValidator(),
-    validators.ModelNameValidator(),
-    validators.SoftwareVersionsValidator(),
-    validators.StudyDateValidator(),
-    validators.ContentDateValidator(),
-    validators.AcquisitionDateValidator(),
+    # @hoodriverheather says in #31 to waive Manufacturer, ModelName, and SoftwareVersions for old data
+    # validators.ManufacturerValidator(),
+    # validators.ModelNameValidator(),
+    # validators.SoftwareVersionsValidator(),
+    # @hoodriverheather says in #31 to waive StudyDate, ContentDate, and AcquisitionDate for ALL data
+    # validators.StudyDateValidator(),
+    # validators.ContentDateValidator(),
+    # validators.AcquisitionDateValidator(),
     validators.AcquisitionTimeValidator(),
     validators.ContentTimeValidator(),
     validators.RowsValidator(),
@@ -120,13 +129,57 @@ _all_required_validators = [
     validators.ImagePositionPatientValidator(),
     validators.ImageOrientationPatientValidator(),
 ]
+_all_ct_required_validators_for_new_data = _all_ct_required_validators + [
+    validators.ManufacturerValidator(),
+    validators.ModelNameValidator(),
+    validators.SoftwareVersionsValidator(),
+]
+register_profile(Profile(ProfileName.CT_STD, _all_ct_required_validators, []))
+register_profile(Profile(ProfileName.CT_STD_NEW, _all_ct_required_validators_for_new_data, []))
 
-register_profile(Profile(ProfileName.CT_STD, _all_required_validators, []))
-# MR_STD is identical to CT_STD — why even bother with separate profiles? Ask @hoodriverheather.
-register_profile(Profile(ProfileName.MR_STD, _all_required_validators, []))
-# PET_STD is identical to CT_STD and MR_STD
-register_profile(Profile(ProfileName.PET_STD, _all_required_validators, []))
+_all_mr_required_validators = [
+    validators.SOPClassUIDValidator(),
+    validators.ModalityValidator(),
+    validators.MisterImageTypeValidator(),
+    validators.SeriesDescriptionValidator(),
+    validators.FrameOfReferenceUIDValidator(),
+    validators.StudyInstanceUIDValidator(),
+    validators.SeriesInstanceUIDValidator(),
+    validators.SOPInstanceUIDValidator(),
+    validators.SeriesNumberValidator(),
+    validators.InstanceNumberValidator(),
+    # @hoodriverheather says in #31 to waive Manufacturer, ModelName, and SoftwareVersions for old data
+    # validators.ManufacturerValidator(),
+    # validators.ModelNameValidator(),
+    # validators.SoftwareVersionsValidator(),
+    # @hoodriverheather says in #31 to waive StudyDate, ContentDate, and AcquisitionDate for ALL data
+    # validators.StudyDateValidator(),
+    # validators.ContentDateValidator(),
+    # validators.AcquisitionDateValidator(),
+    validators.AcquisitionTimeValidator(),
+    validators.ContentTimeValidator(),
+    validators.RowsValidator(),
+    validators.ColumnsValidator(),
+    validators.BitsAllocatedValidator(),
+    validators.BitsStoredValidator(),
+    validators.HighBitValidator(),
+    validators.PixelRepresentationValidator(),
+    validators.PhotometricInterpretationValidator(),
+    validators.WindowCenterValidator(),
+    validators.WindowWidthValidator(),
+    validators.SliceThicknessValidator(),
+    validators.PixelSpacingValidator(),
+    validators.ImagePositionPatientValidator(),
+    validators.ImageOrientationPatientValidator(),
+]
+_all_mr_required_validators_for_new_data = _all_mr_required_validators + [
+    validators.ManufacturerValidator(),
+    validators.ModelNameValidator(),
+    validators.SoftwareVersionsValidator(),
+]
 
+register_profile(Profile(ProfileName.MR_STD, _all_mr_required_validators, []))
+register_profile(Profile(ProfileName.MR_STD_NEW, _all_mr_required_validators_for_new_data, []))
 
 # LOC validators are the same for CT and MR, so collect them so we can reuse them in both profiles
 _required_loc_validators = [
@@ -149,12 +202,14 @@ _optional_loc_validators = [
     validators.FrameOfReferenceUIDValidator(),
     validators.SeriesNumberValidator(),
     validators.InstanceNumberValidator(),
-    validators.ManufacturerValidator(),
-    validators.ModelNameValidator(),
-    validators.SoftwareVersionsValidator(),
-    validators.StudyDateValidator(),
-    validators.ContentDateValidator(),
-    validators.AcquisitionDateValidator(),
+    # @hoodriverheather says in EDRN/jpl.labcas.validation#31 to waive Manufacturer, ModelName, and SoftwareVersions for old data
+    # validators.ManufacturerValidator(),
+    # validators.ModelNameValidator(),
+    # validators.SoftwareVersionsValidator(),
+    # @hoodriverheather says in #31 to waive StudyDate, ContentDate, and AcquisitionDate for ALL data
+    # validators.StudyDateValidator(),
+    # validators.ContentDateValidator(),
+    # validators.AcquisitionDateValidator(),
     validators.AcquisitionTimeValidator(),
     validators.ContentTimeValidator(),
     validators.WindowCenterValidator(),
@@ -164,12 +219,19 @@ _optional_loc_validators = [
     validators.ImagePositionPatientValidator(),
     validators.ImageOrientationPatientValidator(),
 ]
+_optional_loc_validators_for_new_data = _optional_loc_validators + [
+    validators.ManufacturerValidator(),
+    validators.ModelNameValidator(),
+    validators.SoftwareVersionsValidator(),
+]
 
 register_profile(Profile(ProfileName.CT_LOC, _required_loc_validators, _optional_loc_validators,))
 register_profile(Profile(ProfileName.MR_LOC, _required_loc_validators, _optional_loc_validators,))
+register_profile(Profile(ProfileName.CT_LOC_NEW, _required_loc_validators, _optional_loc_validators_for_new_data,))
+register_profile(Profile(ProfileName.MR_LOC_NEW, _required_loc_validators, _optional_loc_validators_for_new_data,))
 
 # PET_STD is similar to CT_STD and MR_STD … but has 3 different optional validators
-register_profile(Profile(ProfileName.PET_STD, [
+_pet_std_validators = [
     validators.SOPClassUIDValidator(),
     validators.ModalityValidator(),
     validators.ImageTypeValidator(),
@@ -180,12 +242,14 @@ register_profile(Profile(ProfileName.PET_STD, [
     validators.SOPInstanceUIDValidator(),
     validators.SeriesNumberValidator(),
     validators.InstanceNumberValidator(),
-    validators.ManufacturerValidator(),
-    validators.ModelNameValidator(),
-    validators.SoftwareVersionsValidator(),
-    validators.StudyDateValidator(),
-    validators.ContentDateValidator(),
-    validators.AcquisitionDateValidator(),
+    # @hoodriverheather says in EDRN/jpl.labcas.validation#31 to waive Manufacturer, ModelName, and SoftwareVersions
+    # validators.ManufacturerValidator(),
+    # validators.ModelNameValidator(),
+    # validators.SoftwareVersionsValidator(),
+    # @hoodriverheather says in #31 to waive StudyDate, ContentDate, and AcquisitionDate for ALL data
+    # validators.StudyDateValidator(),
+    # validators.ContentDateValidator(),
+    # validators.AcquisitionDateValidator(),
     validators.AcquisitionTimeValidator(),
     validators.ContentTimeValidator(),
     validators.RowsValidator(),
@@ -198,15 +262,22 @@ register_profile(Profile(ProfileName.PET_STD, [
     validators.PixelSpacingValidator(),
     validators.ImagePositionPatientValidator(),
     validators.ImageOrientationPatientValidator(),
-], [
+
+]
+_pet_std_validators_for_new_data = _pet_std_validators + [
+    validators.ManufacturerValidator(),
+    validators.ModelNameValidator(),
+    validators.SoftwareVersionsValidator(),
+]
+_pet_std_optional_validators = [
     validators.WindowCenterValidator(),
-    validators.WindowWidthValidator(),
-    validators.SliceThicknessValidator(),
-]))
+]
+register_profile(Profile(ProfileName.PET_STD, _pet_std_validators, _pet_std_optional_validators))
+register_profile(Profile(ProfileName.PET_STD_NEW, _pet_std_validators_for_new_data, _pet_std_optional_validators))
 
 
 # "Segmentation objects", whatever these are
-register_profile(Profile(ProfileName.SEG, [
+_required_seg_validators = [
     validators.SOPClassUIDValidator(),    
     validators.ModalityValidator(),
     validators.FrameOfReferenceUIDValidator(),
@@ -215,17 +286,20 @@ register_profile(Profile(ProfileName.SEG, [
     validators.SOPInstanceUIDValidator(),
     validators.RowsValidator(),
     validators.ColumnsValidator(),
-], [
+]
+_optional_seg_validators = [
     validators.ImageTypeValidator(),
     validators.SeriesDescriptionValidator(),
     validators.SeriesNumberValidator(),
     validators.InstanceNumberValidator(),
-    validators.ManufacturerValidator(),
-    validators.ModelNameValidator(),
-    validators.SoftwareVersionsValidator(),
-    validators.StudyDateValidator(),
-    validators.ContentDateValidator(),
-    validators.AcquisitionDateValidator(),
+    # @hoodriverheather says in EDRN/jpl.labcas.validation#31 to waive Manufacturer, ModelName, and SoftwareVersions
+    # validators.ManufacturerValidator(),
+    # validators.ModelNameValidator(),
+    # validators.SoftwareVersionsValidator(),
+    # @hoodriverheather says in #31 to waive StudyDate, ContentDate, and AcquisitionDate for ALL data
+    # validators.StudyDateValidator(),
+    # validators.ContentDateValidator(),
+    # validators.AcquisitionDateValidator(),
     validators.AcquisitionTimeValidator(),
     validators.ContentTimeValidator(),
     validators.BitsAllocatedValidator(),
@@ -233,10 +307,17 @@ register_profile(Profile(ProfileName.SEG, [
     validators.HighBitValidator(),
     validators.PixelRepresentationValidator(),
     validators.PhotometricInterpretationValidator(),
-]))
+]
+_optional_seg_validators_for_new_data = _optional_seg_validators + [
+    validators.ManufacturerValidator(),
+    validators.ModelNameValidator(),
+    validators.SoftwareVersionsValidator(),
+]
+register_profile(Profile(ProfileName.SEG, _required_seg_validators, _optional_seg_validators))
+register_profile(Profile(ProfileName.SEG_NEW, _required_seg_validators, _optional_seg_validators_for_new_data))
 
 # Secondary Capture, again, whatever thse are
-register_profile(Profile(ProfileName.SC, [
+_required_sc_validators = [
     validators.SOPClassUIDValidator(),
     validators.ModalityValidator(),
     validators.StudyInstanceUIDValidator(),
@@ -251,21 +332,31 @@ register_profile(Profile(ProfileName.SC, [
     validators.PhotometricInterpretationValidator(),    
     validators.WindowCenterValidator(),
     validators.WindowWidthValidator(),
-], [
+]
+_optional_sc_validators = [
     validators.ImageTypeValidator(),
     validators.SeriesDescriptionValidator(),
     validators.FrameOfReferenceUIDValidator(),
     validators.SeriesNumberValidator(),
     validators.InstanceNumberValidator(),
+    # @hoodriverheather says in EDRN/jpl.labcas.validation#31 to waive Manufacturer, ModelName, and SoftwareVersions
+    # validators.ManufacturerValidator(),
+    # validators.ModelNameValidator(),
+    # validators.SoftwareVersionsValidator(),
+    # @hoodriverheather says in #31 to waive StudyDate, ContentDate, and AcquisitionDate for ALL data
+    # validators.StudyDateValidator(),
+    # validators.ContentDateValidator(),
+    # validators.AcquisitionDateValidator(),
+    validators.AcquisitionTimeValidator(),
+    validators.ContentTimeValidator()
+]
+_optional_sc_validators_for_new_data = _optional_sc_validators + [
     validators.ManufacturerValidator(),
     validators.ModelNameValidator(),
     validators.SoftwareVersionsValidator(),
-    validators.StudyDateValidator(),
-    validators.ContentDateValidator(),
-    validators.AcquisitionDateValidator(),
-    validators.AcquisitionTimeValidator(),
-    validators.ContentTimeValidator(),
-]))
+]
+register_profile(Profile(ProfileName.SC, _required_sc_validators, _optional_sc_validators))
+register_profile(Profile(ProfileName.SC_NEW, _required_sc_validators, _optional_sc_validators_for_new_data))
 
 register_profile(Profile(ProfileName.GENERIC, [
     validators.SOPClassUIDValidator(),
@@ -286,12 +377,14 @@ register_profile(Profile(ProfileName.GENERIC, [
     validators.FrameOfReferenceUIDValidator(),
     validators.SeriesNumberValidator(),
     validators.InstanceNumberValidator(),
-    validators.ManufacturerValidator(),
-    validators.ModelNameValidator(),
-    validators.SoftwareVersionsValidator(),
-    validators.StudyDateValidator(),
-    validators.ContentDateValidator(),
-    validators.AcquisitionDateValidator(),
+    # @hoodriverheather says in EDRN/jpl.labcas.validation#31 to waive Manufacturer, ModelName, and SoftwareVersions
+    # validators.ManufacturerValidator(),
+    # validators.ModelNameValidator(),
+    # validators.SoftwareVersionsValidator(),
+    # @hoodriverheather says in #31 to waive StudyDate, ContentDate, and AcquisitionDate for ALL data
+    # validators.StudyDateValidator(),
+    # validators.ContentDateValidator(),
+    # validators.AcquisitionDateValidator(),
     validators.AcquisitionTimeValidator(),
     validators.ContentTimeValidator(),
     validators.WindowCenterValidator(),
@@ -317,12 +410,14 @@ _required_der_validators = [
     validators.SOPInstanceUIDValidator(),
     validators.SeriesNumberValidator(),
     validators.InstanceNumberValidator(),
-    validators.ManufacturerValidator(),
-    validators.ModelNameValidator(),
-    validators.SoftwareVersionsValidator(),
-    validators.StudyDateValidator(),
-    validators.ContentDateValidator(),
-    validators.AcquisitionDateValidator(),
+    # @hoodriverheather says in EDRN/jpl.labcas.validation#31 to waive Manufacturer, ModelName, and SoftwareVersions
+    # validators.ManufacturerValidator(),
+    # validators.ModelNameValidator(),
+    # validators.SoftwareVersionsValidator(),
+    # @hoodriverheather says in #31 to waive StudyDate, ContentDate, and AcquisitionDate for ALL data
+    # validators.StudyDateValidator(),
+    # validators.ContentDateValidator(),
+    # validators.AcquisitionDateValidator(),
     validators.AcquisitionTimeValidator(),
     validators.ContentTimeValidator(),
     validators.RowsValidator(),
@@ -341,6 +436,12 @@ _optional_der_validators = [
     validators.ImagePositionPatientValidator(),
     validators.ImageOrientationPatientValidator(),
 ]
-
+_required_der_validators_for_new_data = _required_der_validators + [
+    validators.ManufacturerValidator(),
+    validators.ModelNameValidator(),
+    validators.SoftwareVersionsValidator(),
+]
 register_profile(Profile(ProfileName.CT_DER, _required_der_validators, _optional_der_validators))
 register_profile(Profile(ProfileName.MR_DER, _required_der_validators, _optional_der_validators))
+register_profile(Profile(ProfileName.CT_DER_NEW, _required_der_validators_for_new_data, _optional_der_validators))
+register_profile(Profile(ProfileName.MR_DER_NEW, _required_der_validators_for_new_data, _optional_der_validators))

@@ -106,3 +106,17 @@ class AcquisitionMatrixValidator(RegexValidator):
         if elem is not None and elem.value:
             findings.update(super().validate(potential_file))
         return findings
+
+
+class MisterImageTypeValidator(RegexValidator):
+    '''A validator that checks the ImageType tag for MR data only (Mister Data)
+    
+    Mister Data at one time should just be the word "LOCALIZER", but it can actually
+    be anything.
+    '''
+    description = 'ImageType for MR data can be anything up to 128 characters long'
+    tag = pydicom.tag.Tag((0x0008, 0x0008))
+    # Old pattern: the word "LOCALIZER"
+    # regex = re.compile(r'^LOCALIZER$', re.IGNORECASE)
+    # New pattern: any string up to 128 characters long
+    regex = re.compile(r'^.{1,128}$')

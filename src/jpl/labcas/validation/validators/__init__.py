@@ -40,7 +40,7 @@ from ._core import (  # noqa: F401
     WindowWidthValidator,
 
 )
-from ._mr import SpacingBetweenSlicesValidator, AcquisitionMatrixValidator  # noqa: F401
+from ._mr import SpacingBetweenSlicesValidator, AcquisitionMatrixValidator, MisterImageTypeValidator  # noqa: F401
 
 __all__ = [
     ExperimentalModalityValidator, ExperimentalManufacturerValidator, ExperimentalWarningValidator,
@@ -58,6 +58,7 @@ __all__ = [
     ImageTypeValidator,
     InstanceNumberValidator,
     ManufacturerValidator,
+    MisterImageTypeValidator,
     ModalityValidator,
     ModelNameValidator,
     PhotometricInterpretationValidator,

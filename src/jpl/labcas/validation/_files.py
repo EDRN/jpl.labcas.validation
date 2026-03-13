@@ -139,45 +139,44 @@ class PotentialFile:
     _special_image_types = set[str](['localizer', 'scout', 'survey', 'surview', 'top', 'topogram', 'scanogram'])
     _derived_image_types = set[str](['derived', 'reformatted', 'mpr', 'mip', 'minip', 'average', 'subtracted', 'projection'])
 
-    def _determine_profile_name(self, ds: pydicom.Dataset):
+    def _determine_profile_name(self, ds: pydicom.Dataset, for_new_data: bool = False):
         from ._profiles import ProfileName
         sop_class_uid = self._safely_extract_value_for_tag(ds, 'SOPClassUID') or ''
         image_type = set[str]([i.lower() for i in self._safely_extract_value_for_tag(ds, 'ImageType') or []])
 
         if sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.2'):
             if self._special_image_types.intersection(image_type):
-                return ProfileName.CT_LOC
+                return ProfileName.CT_LOC_NEW if for_new_data else ProfileName.CT_LOC
             elif self._derived_image_types.intersection(image_type):
-                return ProfileName.CT_DER
+                return ProfileName.CT_DER_NEW if for_new_data else ProfileName.CT_DER
             elif len(image_type) == 0:
                 return ProfileName.MISSING_IMAGE_TYPE
             else:
-                return ProfileName.CT_STD
+                return ProfileName.CT_STD_NEW if for_new_data else ProfileName.CT_STD
         elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.4'):
             if self._special_image_types.intersection(image_type):
-                return ProfileName.MR_LOC
+                return ProfileName.MR_LOC_NEW if for_new_data else ProfileName.MR_LOC
             elif self._derived_image_types.intersection(image_type):
                 return ProfileName.MR_DER
             elif len(image_type) == 0:
                 return ProfileName.MISSING_IMAGE_TYPE
             else:
-                return ProfileName.MR_STD
+                return ProfileName.MR_STD_NEW if for_new_data else ProfileName.MR_STD
         elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.128'):
-            return ProfileName.PET_STD
+            return ProfileName.PET_STD_NEW if for_new_data else ProfileName.PET_STD
         elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.7'):
-            return ProfileName.SC
+            return ProfileName.SC_NEW if for_new_data else ProfileName.SC
         elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.66.4'):
-            return ProfileName.SEG
+            return ProfileName.SEG_NEW if for_new_data else ProfileName.SEG
 
         return ProfileName.GENERIC
 
-    @property
-    def profile_name(self) -> str | None:
+    def profile_name(self, for_new_data: bool = False) -> str | None:
         from ._profiles import ProfileName
         if self._profile_name is None:
             try:
                 ds = self.dcmread(stop_before_pixels=True, force=False)
-                self._profile_name = self._determine_profile_name(ds)
+                self._profile_name = self._determine_profile_name(ds, for_new_data)
                 del ds
             except Exception as ex:
                 _logger.error(
@@ -213,3 +212,27 @@ class PotentialFile:
             return False
         '''Return True if the current potential file is less than the other potential file.'''
         return self.path < other.path
+    
+    @property
+    def rows(self) -> int:
+        '''Return the number of rows in the DICOM file, or 0 if not available.'''
+        try:
+            # Utterly bizarre behavior! If I call _safely_extract_value_for_tag(…, 'Rows'), I get
+            # gibberish binary data. But if I just call it a *second time*, then I get an integer.
+            # So forget _safely_extract_value_for_tag, and just ask for Rows directly.
+            return int(self.dcmread(stop_before_pixels=True).Rows)
+        except Exception as ex:
+            _logger.error('🖼️ Could not determine rows for %s: %s', self.path, ex)
+            return 0
+
+    @property
+    def columns(self) -> int:
+        '''Return the number of columns in the DICOM file, or 0 if not available.'''
+        try:
+            # Utterly bizarre behavior! If I call _safely_extract_value_for_tag(…, 'Columns'), I get
+            # gibberish binary data. But if I just call it a *second time*, then I get an integer.
+            # So forget _safely_extract_value_for_tag, and just ask for Columns directly.
+            return int(self.dcmread(stop_before_pixels=True).Columns)
+        except Exception as ex:
+            _logger.error('🖼️ Could not determine columns for %s: %s', self.path, ex)
+            return 0

@@ -30,7 +30,7 @@ from ._files import PotentialFile
 from ._findings import Finding, ErrorFinding
 from ._profiles import get_profile, ProfileName
 from ._functions import check_directory, iterate_paths
-from .const import PHI_PII_THRESHOLD, MINIMUM_FILE_SIZE
+from .const import PHI_PII_THRESHOLD, MINIMUM_FILE_SIZE, MINIMUM_MR_LOC_ROWS, MINIMUM_MR_LOC_COLUMNS
 from .phi_pii_recognizers import PHI_PII_RECOGNIZERS, DEFAULT_PHI_PII_RECOGNIZER
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count, Manager
@@ -39,7 +39,7 @@ import argparse, sys, logging, os, pydicom, pysolr, os.path, tempfile, sqlite3, 
 
 
 __doc__ = '🛂 EDRN DICOM Validation: check for PHI/PII and compliance with EDRN core and MR requirements for DICOM tags'
-__copyright__ = 'Copyright © 2025 California Institute of Technology'
+__copyright__ = 'Copyright © 2025–2026 California Institute of Technology'
 __license__ = 'Apache 2.0'
 _recognizer = None  # The one recognizer we'll need for all workers for all files
 _logger = logging.getLogger(__name__)
@@ -103,7 +103,7 @@ def _write_finding_to_db(conn: sqlite3.Connection, finding: Finding):
     ))
 
 
-def _scan_one(potential_file: PotentialFile) -> int | list[Finding]:
+def _scan_one(potential_file: PotentialFile, for_new_data: bool = False) -> int | list[Finding]:
     '''Scan a single file with the global recognizer and all the validators.
     
     Returns:
@@ -111,7 +111,8 @@ def _scan_one(potential_file: PotentialFile) -> int | list[Finding]:
         - If db_path is None: list of Finding objects (for single-process mode)
     '''
     try:
-        if potential_file.profile_name is None or potential_file.profile_name in (ProfileName.GENERIC, ProfileName.NULL, ProfileName.MISSING_IMAGE_TYPE):
+        profile_name = potential_file.profile_name(for_new_data)
+        if profile_name is None or profile_name in (ProfileName.GENERIC, ProfileName.NULL, ProfileName.MISSING_IMAGE_TYPE):
             # Short circuit: not a recognized DICOM file (non-DICOM or unrecognized profile).
             # Do not add to report — we want only DICOM files in the report.
             # Do not check file size here — that applies only to recognized DICOM files.
@@ -127,13 +128,16 @@ def _scan_one(potential_file: PotentialFile) -> int | list[Finding]:
                 score=1.0,
                 error_message=f'Skipping file because it is unexpectedly small; file size is {potential_file.file_size} bytes but require a minimum of {MINIMUM_FILE_SIZE} bytes'
             )]
+        elif profile_name in (ProfileName.MR_LOC, ProfileName.MR_LOC_NEW) and (potential_file.rows < MINIMUM_MR_LOC_ROWS or potential_file.columns < MINIMUM_MR_LOC_COLUMNS):
+            _logger.warning('🖼️ Skipping file %s because it is a small matrix helper file', potential_file)
+            findings = []
         else:
             # Okay, full validation time
             findings: set[Finding] = set()
             findings.update(_recognizer.recognize(potential_file))
 
             # And now to validate the tags against a chosen profile of validators
-            profile = get_profile(potential_file.profile_name)
+            profile = get_profile(profile_name)
             findings.update(profile.validate(potential_file))        
             findings = list(findings)
 
@@ -252,11 +256,13 @@ def _load_findings_from_db(db_path: str) -> list[Finding]:
 
 
 def validate_pool(
-    directory: str, recognizer_name: str, args: argparse.Namespace, concurrency: int, file_generator) -> tuple[str, int]:
-    '''Validate the DICOM files in the given directory using a pool of workers.
+    recognizer_name: str, args: argparse.Namespace, concurrency: int, file_generator,
+    for_new_data: bool = False
+) -> tuple[str, int]:
+    '''Validate the DICOM files using a pool of workers.
     
     The `file_generator` function is a callable that returns an iterable of paths to the
-    DICOM files in the given directory.
+    DICOM files.
     
     Findings are written to a SQLite database by worker processes to reduce memory usage.
     
@@ -283,7 +289,7 @@ def validate_pool(
                 initializer=_init_worker,
                 initargs=(recognizer_name, args_dict, db_path, db_write_lock),
             ) as executor:
-                futures = (executor.submit(_scan_one, p) for p in file_generator())
+                futures = (executor.submit(_scan_one, p, for_new_data) for p in file_generator())
                 total_findings = 0
                 try:
                     for future in as_completed(futures, timeout=None):
@@ -304,16 +310,18 @@ def validate_pool(
             raise
 
 
-def validate_single(directory: str, recognizer_name: str, args: argparse.Namespace, file_generator) -> list[Finding]:
-    '''Validate the DICOM files in the given directory using in the current process.
+def validate_single(
+    recognizer_name: str, args: argparse.Namespace, file_generator, for_new_data: bool = False
+) -> list[Finding]:
+    '''Validate the DICOM files using in the current process.
     
     The `file_generator` function is a callable that returns an iterable of paths to the DICOM
-    files in the given directory.
+    files.
     '''
     _init_worker(recognizer_name, vars(args), db_path=None)  # No database for single-process mode
     results: list[Finding] = []
     for path in file_generator():
-        findings = _scan_one(path)
+        findings = _scan_one(path, for_new_data)
         if isinstance(findings, list):
             results.extend(findings)
     return results
@@ -411,6 +419,9 @@ def main():
         '-f', '--findings-db',
         help='Path to SQLite database of findings; if given the scan is skipped and this database is used instead to report on'
     )
+    parser.add_argument(
+        '-n', '--new-data', action='store_true', help='Scan for new data (subject to stricter checks; default False)'
+    )
     parser.add_argument('directory', nargs='?', help='Directory to scan for DICOM files which typically ends in a collection name like "Prostate_MRI"')
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel, format='%(levelname)s %(message)s')
@@ -441,11 +452,13 @@ def main():
         _logger.info('🔍 Scanning directory: %s', args.directory)
         try:
             if args.concurrency == 1:
-                findings = validate_single(args.directory, args.recognizer, args, file_generator)
+                findings = validate_single(args.recognizer, args, file_generator, args.new_data)
                 _logger.info('🔍 Found %d findings', len(findings))
                 report = Report(findings=findings, score=args.score)
             else:
-                db_path, total_findings = validate_pool(args.directory, args.recognizer, args, args.concurrency, file_generator)
+                db_path, total_findings = validate_pool(
+                    args.recognizer, args, args.concurrency, file_generator, args.new_data
+                )
                 _logger.info('🔍 Found %d findings', total_findings)
                 report = Report(db_path=db_path, score=args.score)
                 _logger.info('🔍 Wrote database in: %s', db_path)

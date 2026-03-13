@@ -3,7 +3,7 @@
 A validation tool for DICOM files used by the Laboratory Catalog and Archive Service (LabCAS) of the Early Detection Research Network (EDRN). This program ensures that DICOM files:
 
 - **Contain little-to-no PHI/PII** — Scans both DICOM headers and pixel data for protected health information (PHI) and personally identifiable information (PII)
-- **Adhere to EDRN requirements** — Validates DICOM tags against the [EDRN core and MR requirements](https://docs.google.com/spreadsheets/d/1Q56vKzK0nB4UAkfLJnBOy6C-7wtHccvZkWYGQHTMpBw/edit?gid=1779958583#gid=1779958583)
+- **Adhere to EDRN requirements** — Validates DICOM tags against the [EDRN core and MR requirements](https://docs.google.com/spreadsheets/d/1oQB0EoeajxFagSrIzF_8hOIc6hbC9MiMvhbYLfr6vPQ/edit?pli=1&gid=1779958583#gid=1779958583)
 
 This tool was developed in response to [EDRN/EDRN-metadata#160](https://github.com/EDRN/EDRN-metadata/issues/160).
 
@@ -176,7 +176,7 @@ The validation framework is modular and extensible:
 
 Development Status: Pre-Alpha
 
-CT requirements may be added in the future, pending completion of the [spreadsheet's CT tab](https://docs.google.com/spreadsheets/d/1Q56vKzK0nB4UAkfLJnBOy6C-7wtHccvZkWYGQHTMpBw/edit?gid=1779958583#gid=1779958583).
+CT requirements may be added in the future, pending completion of the [spreadsheet's CT tab](https://docs.google.com/spreadsheets/d/1oQB0EoeajxFagSrIzF_8hOIc6hbC9MiMvhbYLfr6vPQ/edit?pli=1&gid=1779958583#gid=1779958583).
 
 
 ## 📄 License

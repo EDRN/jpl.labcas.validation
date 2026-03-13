@@ -4,7 +4,7 @@
 
 The validators in this module are derived from the "CORE" tab of @hoodriverheather's spreadsheet at:
 
-https://docs.google.com/spreadsheets/d/1Q56vKzK0nB4UAkfLJnBOy6C-7wtHccvZkWYGQHTMpBw/edit?gid=1779958583#gid=1779958583
+https://docs.google.com/spreadsheets/d/1oQB0EoeajxFagSrIzF_8hOIc6hbC9MiMvhbYLfr6vPQ/edit?pli=1&gid=1779958583#gid=1779958583
 '''
 
 from .._classes import Validator

@@ -157,7 +157,7 @@ class Report:
                 pass
         return 'unknown tag'
 
-    def generate_csv_report(self, output_directory: str):
+    def generate_csv_report(self, output_directory: str, for_new_data: bool = False):
         '''Generate CSV files of the findings.
         
         If db_path is set, queries the database directly without loading all findings into memory.
@@ -222,7 +222,11 @@ class Report:
                                 # Get profile name for this file
                                 from ._files import PotentialFile
                                 potential_file = PotentialFile(file_path)
-                                profile_name = potential_file.profile_name.value if potential_file.profile_name else 'Unknown'
+                                profile_name = potential_file.profile_name(for_new_data)
+                                if profile_name is not None:
+                                    profile_name = profile_name.value
+                                else:
+                                    profile_name = 'Unknown'
                                 kinds = sorted(finding_types.keys())
                                 
                                 for kind_type in kinds:
@@ -279,7 +283,7 @@ class Report:
                                 )
                                 if len(scored_findings) > 0:
                                     # Get profile name from the first finding (all findings for same file have same profile)
-                                    profile_name = scored_findings[0].file.profile_name.value if scored_findings[0].file.profile_name else 'Unknown'
+                                    profile_name = scored_findings[0].file.profile_name(for_new_data).value if scored_findings[0].file.profile_name(for_new_data) else 'Unknown'
                                     for finding in scored_findings:
                                         score, details = finding.score, ", ".join(finding.report())
                                         writer.writerow([site_id, event_id, file_name, profile_name, score, kind, details])
