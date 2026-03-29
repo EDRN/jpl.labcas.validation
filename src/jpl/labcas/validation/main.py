@@ -347,7 +347,7 @@ def _create_solr_paths_iterator(solr_url: str, directory: str, batch_size: int =
         # Build a single query that checks all IDs in this batch
         quoted_ids = ' OR '.join(f'"{file_id}"' for file_id in ids_to_paths.keys())
         query = f'id:({quoted_ids})'
-        results = solr.search(query, rows=len(ids_to_paths), fl=['id', 'eventID', 'BlindedSiteID'])
+        results = solr.search(query, sort='id asc', rows=len(ids_to_paths), fl=['id', 'eventID', 'BlindedSiteID'])
         existing_paths: set[PotentialFile] = set()
         for doc in results.docs:
             doc_id, event_id, site_id = doc.get('id'), doc.get('eventID', ['«unknown event»'])[0], doc.get('BlindedSiteID', ['«unknown site»'])[0]
