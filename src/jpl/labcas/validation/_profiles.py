@@ -348,7 +348,8 @@ _optional_sc_validators = [
     # validators.ContentDateValidator(),
     # validators.AcquisitionDateValidator(),
     validators.AcquisitionTimeValidator(),
-    validators.ContentTimeValidator()
+    validators.ContentTimeValidator(),
+    validators.ImagePositionPatientValidator(),
 ]
 _optional_sc_validators_for_new_data = _optional_sc_validators + [
     validators.ManufacturerValidator(),
