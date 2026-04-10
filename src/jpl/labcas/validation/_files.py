@@ -36,8 +36,8 @@ class PotentialFile:
         if site_id: self.site_id = site_id
         if event_id: self.event_id = event_id
 
-        # Produce this on demand
-        self._profile_name = None
+        # Produce on demand; keyed by for_new_data (standard vs new-data profile names differ)
+        self._profile_names: dict[bool, object] = {}
 
     @lru_cache
     def _read_dicom_file(self, stop_before_pixels: bool = False, force: bool = False) -> pydicom.Dataset:
@@ -171,20 +171,20 @@ class PotentialFile:
 
         return ProfileName.GENERIC
 
-    def profile_name(self, for_new_data: bool = False) -> str | None:
+    def profile_name(self, for_new_data: bool = False):
         from ._profiles import ProfileName
-        if self._profile_name is None:
+        if for_new_data not in self._profile_names:
             try:
                 ds = self.dcmread(stop_before_pixels=True, force=False)
-                self._profile_name = self._determine_profile_name(ds, for_new_data)
+                self._profile_names[for_new_data] = self._determine_profile_name(ds, for_new_data)
                 del ds
             except Exception as ex:
                 _logger.error(
                     '💥 Unexpected exception reading %s to determine its profile, falling back to generic: %s',
                     self.path, ex
                 )
-                self._profile_name = ProfileName.GENERIC
-        return self._profile_name
+                self._profile_names[for_new_data] = ProfileName.GENERIC
+        return self._profile_names[for_new_data]
 
     def __repr__(self) -> str:
         '''Return a convenient representation of the potential file.'''

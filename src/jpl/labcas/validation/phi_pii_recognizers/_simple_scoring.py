@@ -261,7 +261,9 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         
         This yields tuples of (path, value, value representation, tag).
         '''
-        for elem in ds.iterall():
+        # Use direct iteration (not iterall) so nested sequence items are only
+        # visited through explicit recursion with their full path context.
+        for elem in ds:
             t = pydicom.tag.Tag(elem.tag)
             vr = elem.VR if hasattr(elem, 'VR') else None
             name = elem.keyword or elem.name or f'{t.group:04x}{t.element:04x}'
@@ -286,6 +288,7 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         - Starts with "anon" (case-insensitive), OR
         - Matches "Doe John", "Doe^John", "John Doe", or "John^Doe" (case-insensitive), OR
         - Matches the specific anonymized value "P0HeLkT8KYKj14Q7GTGJjL^ry_x+LTzqsQgC9B5hZWso"
+        - Or this other anonymized value "Tm8dYx4WIXjBLqdGI7MX6J^g4ADmJAEGN2Ki2RJUqwy8"
         '''
         if not s:
             return False
@@ -303,7 +306,9 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         # Also handle trailing carets/spaces
         normalized = s_stripped.rstrip('^').strip()
         normalized_lower = normalized.lower()
-        if normalized_lower == 'p0helkt8kykj14q7gtgjjl^ry_x+ltzqsqgc9b5hzwso':
+        if normalized_lower in (
+            'p0helkt8kykj14q7gtgjjl^ry_x+ltzqsqgc9b5hzwso', 'tm8dyx4wixjblqdgimx6j^g4admjaggn2kirjuqwy8'
+        ):
             return True
         
         # Check for "Doe John" patterns (case-insensitive)
@@ -529,7 +534,11 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
                 if found_phi_pii and best_value:
                     finding = HeaderFinding(
                         file=potential_file, value=self._displayable_str(best_value), score=best_score, tag=t,
-                        description=f'Strict high-risk sequence tag "{tag_keyword}" contains PHI/PII with score {best_score:.2f} — there may be additional PHI/PII in this tag, this is just the first detection'
+                        description=(
+                            f'Strict high-risk sequence tag "{tag_keyword}" at path "{tag_keyword}" '
+                            f'contains PHI/PII with score {best_score:.2f} — there may be additional '
+                            'PHI/PII in this tag, this is just the first detection'
+                        )
                     )
                     findings.append(finding)
         
@@ -572,7 +581,7 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
                         score = self._score(t, vr, c, None)
                         finding = HeaderFinding(
                             file=potential_file, value=self._displayable_str(c), score=score, tag=t,
-                            description=f'Strict high-risk tag "{tag_keyword}" may need closer look with score {score}'
+                            description=f'Strict high-risk tag "{tag_keyword}" at path "{path}" may need closer look with score {score}'
                         )
                         findings.append(finding)
 
@@ -607,7 +616,7 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
                 if allow_name_like_here and self._pn_structured.match(c):
                     finding = HeaderFinding(
                         file=potential_file, value=self._displayable_str(c), score=self._score(t, vr, c, 'PN_structured'), tag=t,
-                        description=f'Structured name detection «{c}»'
+                        description=f'Structured name detection at path "{path}" for value «{c}»'
                     )
                     findings.append(finding)
                     # Continue here to avoid double-counting with the NAME_like pattern
@@ -627,7 +636,7 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
                     if rx.search(c):
                         finding = HeaderFinding(
                             file=potential_file, value=self._displayable_str(c), score=self._score(t, vr, c, key), tag=t,
-                            description=f'Using pattern {key}'
+                            description=f'Using pattern {key} at path "{path}"'
                         )
                         findings.append(finding)
 

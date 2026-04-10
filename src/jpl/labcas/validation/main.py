@@ -443,7 +443,7 @@ def main():
     if db_path:
         _logger.info('🔍 Using SQLite database for findings: %s', db_path)
         report = Report(db_path=db_path, score=args.score)
-        report.generate_report(output_directory)
+        report.generate_report(output_directory, for_new_data=args.new_data)
     elif not args.directory:
         _logger.error('💥 No directory provided')
         sys.exit(1)
@@ -462,7 +462,7 @@ def main():
                 _logger.info('🔍 Found %d findings', total_findings)
                 report = Report(db_path=db_path, score=args.score)
                 _logger.info('🔍 Wrote database in: %s', db_path)
-            report.generate_report(output_directory)
+            report.generate_report(output_directory, for_new_data=args.new_data)
         finally:
             if db_path:
                 _logger.info('Database findings preserved in %s', db_path)

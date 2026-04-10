@@ -304,5 +304,5 @@ class Report:
             report[site_id][event_id][file_name].append(finding)
         return report
 
-    def generate_report(self, output_directory: str):
-        return self.generate_csv_report(output_directory)
+    def generate_report(self, output_directory: str, for_new_data: bool = False):
+        return self.generate_csv_report(output_directory, for_new_data=for_new_data)
