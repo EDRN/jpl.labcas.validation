@@ -4,7 +4,7 @@
 # and save the reports to the reports directory
 
 # Use a /tmp with a lot of space
-TMPDIR=/labcas-data/tmp
+TMPDIR=/labcas-data/tmp/validation
 export TMPDIR
 
 # The base directory for the LabCAS archived data for EDRN
