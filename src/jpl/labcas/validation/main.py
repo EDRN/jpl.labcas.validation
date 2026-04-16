@@ -284,9 +284,13 @@ def _create_non_solr_paths_iterator(directory: str):
     return _iterate
 
 
-def _create_solr_paths_iterator(solr_url: str, directory: str, batch_size: int = 100):
-    '''Create a function that iterates over the paths in the given directory using the given Solr URL.'''
-    _logger.info('🔍 Creating Solr paths iterator for %s with batch size %d', directory, batch_size)
+def _create_solr_paths_iterator(solr_url: str, scan_directory: str, collection_directory: str, batch_size: int = 100):
+    '''Create a function that iterates over paths in scan_directory using the given Solr URL.
+
+    `collection_directory` is used to derive LabCAS file IDs so IDs still start at the collection
+    folder even when `scan_directory` targets a specific site subset.
+    '''
+    _logger.info('🔍 Creating Solr paths iterator for %s with batch size %d', scan_directory, batch_size)
 
     def _collect_existing_paths(solr: pysolr.Solr, ids_to_paths: dict[str, str]) -> set[PotentialFile]:
         if not ids_to_paths:
@@ -304,13 +308,13 @@ def _create_solr_paths_iterator(solr_url: str, directory: str, batch_size: int =
                 existing_paths.add(PotentialFile(ids_to_paths[doc_id], site_id=site_id, event_id=event_id))
         return existing_paths
 
-    collection_name = os.path.basename(directory)
+    collection_name = os.path.basename(collection_directory)
     solr = pysolr.Solr(solr_url, verify=False)
     paths: set[PotentialFile] = set()
     batch: dict[str, str] = {}
 
     # First pass to populate `paths` with files both in the filesystem and in Solr
-    for path in iterate_paths(directory):
+    for path in iterate_paths(scan_directory):
         try:
             collection_index = path.index(collection_name)
         except ValueError:
@@ -325,7 +329,7 @@ def _create_solr_paths_iterator(solr_url: str, directory: str, batch_size: int =
     # Pick up any remaining files in the last batch
     if batch: paths.update(_collect_existing_paths(solr, batch))
 
-    _logger.info('🔍 Found %d paths in both the filesystem at %s and in Solr %s', len(paths), directory, solr_url)
+    _logger.info('🔍 Found %d paths in both the filesystem at %s and in Solr %s', len(paths), scan_directory, solr_url)
     def _iterate() -> Iterable[PotentialFile]:
         for path in paths:
             yield path
@@ -370,6 +374,10 @@ def main():
         action='store_true',
         help='Print all known validation profiles and exit (no scan)',
     )
+    parser.add_argument(
+        '--subset',
+        help='Optional site subdirectory under directory to scan (example: Images_Site_uDUsCV9ikmtw)',
+    )
     parser.add_argument('directory', nargs='?', help='Directory to scan for DICOM files which typically ends in a collection name like "Prostate_MRI"')
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel, format='%(levelname)s %(message)s')
@@ -380,44 +388,55 @@ def main():
     _logger.info('🧵 Multiprocessing start method: %s', get_context().get_start_method())
     output_directory = args.output.strip()
     os.makedirs(output_directory, exist_ok=True)
+    if not args.directory:
+        _logger.error('💥 No directory provided')
+        sys.exit(1)
+
+    collection_directory = args.directory
+    scan_directory = collection_directory
+    if args.subset:
+        subset = args.subset.strip()
+        if not subset:
+            _logger.error('💥 --subset cannot be empty')
+            sys.exit(1)
+        scan_directory = os.path.join(collection_directory, subset)
+
     if args.url:
         solr_url = args.url.strip()
         solr_url = solr_url if solr_url.endswith('/') else solr_url + '/'
         if 'files' not in solr_url:
             solr_url += 'files/'
         _logger.info('🔍 Solr URL is %s', solr_url)
-        file_generator = _create_solr_paths_iterator(solr_url, args.directory)
+        file_generator = _create_solr_paths_iterator(solr_url, scan_directory, collection_directory)
     else:
         _logger.info('🔍 Not using Solr (no URL provided)')
         solr_url = None
-        file_generator = _create_non_solr_paths_iterator(args.directory)
+        file_generator = _create_non_solr_paths_iterator(scan_directory)
 
     db_path = None
-    if not args.directory:
-        _logger.error('💥 No directory provided')
-        sys.exit(1)
-    else:
-        check_directory(args.directory)
-        _logger.info('🔍 Scanning directory: %s', args.directory)
-        try:
-            if args.concurrency == 1:
-                findings = validate_single(args.recognizer, args, file_generator, args.new_data)
-                _logger.info('🔍 Found %d findings', len(findings))
-                report = Report(findings=findings, score=args.score)
-            else:
-                db_path, total_findings = validate_pool(
-                    args.recognizer, args, args.concurrency, file_generator, args.new_data
-                )
-                _logger.info('🔍 Found %d findings', total_findings)
-                report = Report(db_path=db_path, score=args.score)
-                _logger.info('🔍 Wrote database in: %s', db_path)
-            report.generate_report(output_directory, for_new_data=args.new_data)
-        finally:
-            if db_path:
-                try:
-                    os.remove(db_path)
-                except OSError as ex:
-                    _logger.warning('⚠️ Could not remove temporary findings database %s: %s', db_path, ex)
+    check_directory(scan_directory)
+    _logger.info('🔍 Scanning directory: %s', scan_directory)
+    if args.subset:
+        _logger.info('🔍 Subset filter active: %s', args.subset.strip())
+    try:
+        if args.concurrency == 1:
+            findings = validate_single(args.recognizer, args, file_generator, args.new_data)
+            _logger.info('🔍 Found %d findings', len(findings))
+            report = Report(findings=findings, score=args.score)
+        else:
+            db_path, total_findings = validate_pool(
+                args.recognizer, args, args.concurrency, file_generator, args.new_data
+            )
+            _logger.info('🔍 Found %d findings', total_findings)
+            report = Report(db_path=db_path, score=args.score)
+            _logger.info('🔍 Wrote database in: %s', db_path)
+        report.generate_report(output_directory, for_new_data=args.new_data)
+    finally:
+        if db_path:
+            try:
+                os.remove(db_path)
+            except OSError as ex:
+                _logger.warning('⚠️ Could not remove temporary findings database %s: %s', db_path, ex)
         
     sys.exit(0)
 
