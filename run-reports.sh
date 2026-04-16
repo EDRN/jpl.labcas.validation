@@ -6,6 +6,7 @@
 # Use a /tmp with a lot of space
 TMPDIR=/labcas-data/tmp/validation
 export TMPDIR
+mkdir --parents $TMPDIR
 
 # The base directory for the LabCAS archived data for EDRN
 base=/labcas-data/labcas-backend/archive/edrn
