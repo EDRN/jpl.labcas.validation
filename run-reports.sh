@@ -10,6 +10,9 @@ export TMPDIR
 # The base directory for the LabCAS archived data for EDRN
 base=/labcas-data/labcas-backend/archive/edrn
 
+# Where is Solr in all this?
+solr=https://localhost:8984/solr/
+
 # Sites for Lung_Team_Project_2
 Lung_Team_Project_2="Images_Site_AvinPOWpghrek Images_Site_ldytNSGnHnrBQ Images_Site_NVRiRYzqspbvMw Images_Site_UB5yhu2StyPSLQ Images_Site_weRc6TUHvOru6A Images_Site_YGaeI0aN9IAeRA LTP2-Site6 LTP2-Site7"
 
@@ -30,7 +33,7 @@ mkdir --parents reports
 echo "Running Lung_Team_Project_2" 1>&2
 for site in $Lung_Team_Project_2; do
     echo "Running Lung_Team_Project_2 $site" 1>&2
-    .venv/bin/validate-dicom-files --output reports $base/Lung_Team_Project_2/$site
+    .venv/bin/validate-dicom-files --url $solr --output reports $base/Lung_Team_Project_2/$site
     echo "Lung_Team_Project_2 $site done" 1>&2
 done
 
@@ -38,7 +41,7 @@ done
 echo "Running Prostate_MRI" 1>&2
 for site in $Prostate_MRI; do
     echo "Running Prostate_MRI $site" 1>&2
-    .venv/bin/validate-dicom-files --output reports $base/Prostate_MRI/$site
+    .venv/bin/validate-dicom-files --url $solr --output reports $base/Prostate_MRI/$site
     echo "Prostate_MRI $site done" 1>&2
 done
 
