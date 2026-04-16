@@ -48,9 +48,10 @@ class ProfileName(Enum):
 class Profile:
     '''A "profile" is a set of validators to apply to subsets of DICOM files depending on their contents.'''
 
-    def __init__(self, name: ProfileName, required_validators: list[Validator], optional_validators: list[Validator]):
+    def __init__(self, name: ProfileName, alias: str | None, required_validators: list[Validator], optional_validators: list[Validator]):
         '''Initialize the profile with the given name and validators.'''
         self.name: ProfileName = name
+        self.alias = alias if alias else 'N/A'
         self.required_validators = required_validators
         self.optional_validators = optional_validators
 
@@ -77,17 +78,18 @@ class Profile:
         return sorted(list[Finding](findings))
     
     def __str__(self) -> str:
-        rc = f'### Profile "{self.name}"\n\nRequired validators:\n\n'
+        rc = f'### `{self.name}`\n\n'
+        rc += f"Alias from Heather's spreadsheet: {self.alias}\n\nRequired validators:\n\n"
         if not self.required_validators:
             rc += 'None defined\n'
         else:
-            for validator in sorted(self.required_validators, key=str):
+            for validator in self.required_validators:
                 rc += f'- {validator}\n'
         rc += '\n\nOptional validators:\n\n'
         if not self.optional_validators:
             rc += 'None defined\n'
         else:
-            for validator in sorted(self.optional_validators, key=str):
+            for validator in self.optional_validators:
                 rc += f'- {validator}\n'
         return rc
 
@@ -109,373 +111,575 @@ def get_profile(profile_name: ProfileName) -> Profile:
 
 PROFILES: dict[ProfileName, Profile] = {}
 
-from . import validators
-register_profile(Profile(ProfileName.NULL, [], []))
+from .validators import *  # noqa: F403
+register_profile(Profile(ProfileName.NULL, None, [], []))
 
-_all_ct_required_validators = [
-    validators.SOPClassUIDValidator(),
-    validators.ModalityValidator(),
-    validators.ImageTypeValidator(),
-    # @hoodriverheather says in #31 that SeriesDescription is optional for all CT for old data
-    # validators.SeriesDescriptionValidator(),
-    validators.FrameOfReferenceUIDValidator(),
-    validators.StudyInstanceUIDValidator(),
-    validators.SeriesInstanceUIDValidator(),
-    validators.SOPInstanceUIDValidator(),
-    validators.SeriesNumberValidator(),
-    validators.InstanceNumberValidator(),
-    # @hoodriverheather says in #31 to waive Manufacturer, ModelName, and SoftwareVersions for old data
-    # validators.ManufacturerValidator(),
-    # validators.ModelNameValidator(),
-    # validators.SoftwareVersionsValidator(),
-    # @hoodriverheather says in #31 to waive StudyDate, ContentDate, and AcquisitionDate for ALL data
-    # validators.StudyDateValidator(),
-    # validators.ContentDateValidator(),
-    # validators.AcquisitionDateValidator(),
-    validators.AcquisitionTimeValidator(),
-    validators.ContentTimeValidator(),
-    validators.RowsValidator(),
-    validators.ColumnsValidator(),
-    validators.BitsAllocatedValidator(),
-    validators.BitsStoredValidator(),
-    validators.HighBitValidator(),
-    validators.PixelRepresentationValidator(),
-    validators.PhotometricInterpretationValidator(),
-    validators.WindowCenterValidator(),
-    validators.WindowWidthValidator(),
-    validators.SliceThicknessValidator(),
-    validators.PixelSpacingValidator(),
-    validators.ImagePositionPatientValidator(),
-    validators.ImageOrientationPatientValidator(),
-]
-_all_ct_required_validators_for_new_data = _all_ct_required_validators + [
-    validators.SeriesDescriptionValidator(),
-    validators.ManufacturerValidator(),
-    validators.ModelNameValidator(),
-    validators.SoftwareVersionsValidator(),
-]
-register_profile(Profile(ProfileName.CT_STD, _all_ct_required_validators, [
-    validators.SeriesDescriptionValidator(),
-    validators.ManufacturerValidator(),
-    validators.ModelNameValidator(),
-    validators.SoftwareVersionsValidator(),
-    validators.AcquisitionTimeValidator(),
-    validators.ContentTimeValidator(),
-]))
-register_profile(Profile(ProfileName.CT_STD_NEW, _all_ct_required_validators_for_new_data, []))
-
-_all_mr_required_validators = [
-    validators.SOPClassUIDValidator(),
-    validators.ModalityValidator(),
-    validators.MisterImageTypeValidator(),
-    validators.SeriesDescriptionValidator(),
-    validators.FrameOfReferenceUIDValidator(),
-    validators.StudyInstanceUIDValidator(),
-    validators.SeriesInstanceUIDValidator(),
-    validators.SOPInstanceUIDValidator(),
-    validators.SeriesNumberValidator(),
-    validators.InstanceNumberValidator(),
-    # @hoodriverheather says in #31 to waive Manufacturer, ModelName, and SoftwareVersions for old data
-    # validators.ManufacturerValidator(),
-    # validators.ModelNameValidator(),
-    # validators.SoftwareVersionsValidator(),
-    # @hoodriverheather says in #31 to waive StudyDate, ContentDate, and AcquisitionDate for ALL data
-    # validators.StudyDateValidator(),
-    # validators.ContentDateValidator(),
-    # validators.AcquisitionDateValidator(),
-    validators.AcquisitionTimeValidator(),
-    validators.ContentTimeValidator(),
-    validators.RowsValidator(),
-    validators.ColumnsValidator(),
-    validators.BitsAllocatedValidator(),
-    validators.BitsStoredValidator(),
-    validators.HighBitValidator(),
-    validators.PixelRepresentationValidator(),
-    validators.PhotometricInterpretationValidator(),
-    validators.WindowCenterValidator(),
-    validators.WindowWidthValidator(),
-    validators.SliceThicknessValidator(),
-    validators.PixelSpacingValidator(),
-    validators.ImagePositionPatientValidator(),
-    validators.ImageOrientationPatientValidator(),
-]
-_all_mr_required_validators_for_new_data = _all_mr_required_validators + [
-    validators.ManufacturerValidator(),
-    validators.ModelNameValidator(),
-    validators.SoftwareVersionsValidator(),
-]
-
-register_profile(Profile(ProfileName.MR_STD, _all_mr_required_validators, []))
-register_profile(Profile(ProfileName.MR_STD_NEW, _all_mr_required_validators_for_new_data, []))
-
-# LOC validators are the same for CT and MR, so collect them so we can reuse them in both profiles
-_required_loc_validators = [
-    validators.SOPClassUIDValidator(),
-    validators.ModalityValidator(),
-    validators.ImageTypeValidator(),
-    validators.StudyInstanceUIDValidator(),
-    validators.SeriesInstanceUIDValidator(),
-    validators.SOPInstanceUIDValidator(),
-    validators.RowsValidator(),
-    validators.ColumnsValidator(),
-    validators.BitsAllocatedValidator(),
-    validators.BitsStoredValidator(),
-    validators.HighBitValidator(),
-    validators.PixelRepresentationValidator(),
-    validators.PhotometricInterpretationValidator(),    
-]
-_required_loc_validators_for_new_data = _required_loc_validators + [
-    validators.SeriesDescriptionValidator(),
-]
-_optional_loc_validators = [
-    validators.FrameOfReferenceUIDValidator(),
-    validators.SeriesNumberValidator(),
-    validators.InstanceNumberValidator(),
-    # @hoodriverheather says in EDRN/jpl.labcas.validation#31 to waive Manufacturer, ModelName, and SoftwareVersions for old data
-    # validators.ManufacturerValidator(),
-    # validators.ModelNameValidator(),
-    # validators.SoftwareVersionsValidator(),
-    # @hoodriverheather says in #31 to waive StudyDate, ContentDate, and AcquisitionDate for ALL data
-    # validators.StudyDateValidator(),
-    # validators.ContentDateValidator(),
-    # validators.AcquisitionDateValidator(),
-    validators.AcquisitionTimeValidator(),
-    validators.ContentTimeValidator(),
-    validators.WindowCenterValidator(),
-    validators.WindowWidthValidator(),
-    validators.SliceThicknessValidator(),
-    validators.PixelSpacingValidator(),
-    validators.ImagePositionPatientValidator(),
-    validators.ImageOrientationPatientValidator(),
-]
-_optional_loc_validators_for_new_data = _optional_loc_validators + [
-    validators.ManufacturerValidator(),
-    validators.ModelNameValidator(),
-    validators.SoftwareVersionsValidator(),
-]
-
-register_profile(Profile(ProfileName.CT_LOC, _required_loc_validators,
-    _optional_loc_validators + [validators.SeriesDescriptionValidator()]
-))
-register_profile(Profile(ProfileName.MR_LOC, _required_loc_validators, _optional_loc_validators,))
-register_profile(Profile(ProfileName.CT_LOC_NEW, _required_loc_validators_for_new_data, _optional_loc_validators_for_new_data))
-register_profile(Profile(ProfileName.MR_LOC_NEW, _required_loc_validators, _optional_loc_validators_for_new_data))
-
-# PET_STD is similar to CT_STD and MR_STD … but has 3 different optional validators
-_pet_std_validators = [
-    validators.SOPClassUIDValidator(),
-    validators.ModalityValidator(),
-    validators.ImageTypeValidator(),
-    validators.SeriesDescriptionValidator(),
-    validators.FrameOfReferenceUIDValidator(),
-    validators.StudyInstanceUIDValidator(),
-    validators.SeriesInstanceUIDValidator(),
-    validators.SOPInstanceUIDValidator(),
-    validators.SeriesNumberValidator(),
-    validators.InstanceNumberValidator(),
-    # @hoodriverheather says in EDRN/jpl.labcas.validation#31 to waive Manufacturer, ModelName, and SoftwareVersions
-    # validators.ManufacturerValidator(),
-    # validators.ModelNameValidator(),
-    # validators.SoftwareVersionsValidator(),
-    # @hoodriverheather says in #31 to waive StudyDate, ContentDate, and AcquisitionDate for ALL data
-    # validators.StudyDateValidator(),
-    # validators.ContentDateValidator(),
-    # validators.AcquisitionDateValidator(),
-    validators.AcquisitionTimeValidator(),
-    validators.ContentTimeValidator(),
-    validators.RowsValidator(),
-    validators.ColumnsValidator(),
-    validators.BitsAllocatedValidator(),
-    validators.BitsStoredValidator(),
-    validators.HighBitValidator(),
-    validators.PixelRepresentationValidator(),
-    validators.PhotometricInterpretationValidator(),
-    validators.PixelSpacingValidator(),
-    validators.ImagePositionPatientValidator(),
-    validators.ImageOrientationPatientValidator(),
-
-]
-_pet_std_validators_for_new_data = _pet_std_validators + [
-    validators.ManufacturerValidator(),
-    validators.ModelNameValidator(),
-    validators.SoftwareVersionsValidator(),
-]
-_pet_std_optional_validators = [
-    validators.WindowCenterValidator(),
-]
-register_profile(Profile(ProfileName.PET_STD, _pet_std_validators, _pet_std_optional_validators))
-register_profile(Profile(ProfileName.PET_STD_NEW, _pet_std_validators_for_new_data, _pet_std_optional_validators))
-
-
-# "Segmentation objects", whatever these are
-_required_seg_validators = [
-    validators.SOPClassUIDValidator(),    
-    validators.ModalityValidator(),
-    validators.FrameOfReferenceUIDValidator(),
-    validators.StudyInstanceUIDValidator(),
-    validators.SeriesInstanceUIDValidator(),
-    validators.SOPInstanceUIDValidator(),
-    validators.RowsValidator(),
-    validators.ColumnsValidator(),
-]
-_optional_seg_validators = [
-    validators.ImageTypeValidator(),
-    validators.SeriesDescriptionValidator(),
-    validators.SeriesNumberValidator(),
-    validators.InstanceNumberValidator(),
-    # @hoodriverheather says in EDRN/jpl.labcas.validation#31 to waive Manufacturer, ModelName, and SoftwareVersions
-    # validators.ManufacturerValidator(),
-    # validators.ModelNameValidator(),
-    # validators.SoftwareVersionsValidator(),
-    # @hoodriverheather says in #31 to waive StudyDate, ContentDate, and AcquisitionDate for ALL data
-    # validators.StudyDateValidator(),
-    # validators.ContentDateValidator(),
-    # validators.AcquisitionDateValidator(),
-    validators.AcquisitionTimeValidator(),
-    validators.ContentTimeValidator(),
-    validators.BitsAllocatedValidator(),
-    validators.BitsStoredValidator(),
-    validators.HighBitValidator(),
-    validators.PixelRepresentationValidator(),
-    validators.PhotometricInterpretationValidator(),
-]
-_optional_seg_validators_for_new_data = _optional_seg_validators + [
-    validators.ManufacturerValidator(),
-    validators.ModelNameValidator(),
-    validators.SoftwareVersionsValidator(),
-]
-register_profile(Profile(ProfileName.SEG, _required_seg_validators, _optional_seg_validators))
-register_profile(Profile(ProfileName.SEG_NEW, _required_seg_validators, _optional_seg_validators_for_new_data))
-
-# Secondary Capture, again, whatever thse are
-_required_sc_validators = [
-    validators.SOPClassUIDValidator(),
-    validators.ModalityValidator(),
-    validators.StudyInstanceUIDValidator(),
-    validators.SeriesInstanceUIDValidator(),
-    validators.SOPInstanceUIDValidator(),
-    validators.RowsValidator(),
-    validators.ColumnsValidator(),
-    validators.BitsAllocatedValidator(),
-    validators.BitsStoredValidator(),
-    validators.HighBitValidator(),
-    validators.PixelRepresentationValidator(),
-    validators.PhotometricInterpretationValidator(),    
-    validators.WindowCenterValidator(),
-    validators.WindowWidthValidator(),
-]
-_optional_sc_validators = [
-    validators.ImageTypeValidator(),
-    validators.SeriesDescriptionValidator(),
-    validators.FrameOfReferenceUIDValidator(),
-    validators.SeriesNumberValidator(),
-    validators.InstanceNumberValidator(),
-    # @hoodriverheather says in EDRN/jpl.labcas.validation#31 to waive Manufacturer, ModelName, and SoftwareVersions
-    # validators.ManufacturerValidator(),
-    # validators.ModelNameValidator(),
-    # validators.SoftwareVersionsValidator(),
-    # @hoodriverheather says in #31 to waive StudyDate, ContentDate, and AcquisitionDate for ALL data
-    # validators.StudyDateValidator(),
-    # validators.ContentDateValidator(),
-    # validators.AcquisitionDateValidator(),
-    validators.AcquisitionTimeValidator(),
-    validators.ContentTimeValidator(),
-    validators.ImagePositionPatientValidator(),
-]
-_optional_sc_validators_for_new_data = _optional_sc_validators + [
-    validators.ManufacturerValidator(),
-    validators.ModelNameValidator(),
-    validators.SoftwareVersionsValidator(),
-]
-register_profile(Profile(ProfileName.SC, _required_sc_validators, _optional_sc_validators))
-register_profile(Profile(ProfileName.SC_NEW, _required_sc_validators, _optional_sc_validators_for_new_data))
-
-register_profile(Profile(ProfileName.GENERIC, [
-    validators.SOPClassUIDValidator(),
-    validators.ModalityValidator(),
-    validators.StudyInstanceUIDValidator(),
-    validators.SeriesInstanceUIDValidator(),
-    validators.SOPInstanceUIDValidator(),
-    validators.RowsValidator(),
-    validators.ColumnsValidator(),
-    validators.BitsAllocatedValidator(),
-    validators.BitsStoredValidator(),
-    validators.HighBitValidator(),
-    validators.PixelRepresentationValidator(),
-    validators.PhotometricInterpretationValidator(),
+register_profile(Profile(ProfileName.CT_STD, 'ct_std_v1', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    ImageTypeValidator(),
+    FrameOfReferenceUIDValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelSpacingValidator(),
+    PhotometricInterpretationValidator(),
+    WindowCenterValidator(),
+    WindowWidthValidator(),
+    SliceThicknessValidator(),
+    PixelRepresentationValidator(),
+    ImagePositionPatientValidator(),
+    ImageOrientationPatientValidator(),
 ], [
-    validators.ImageTypeValidator(),
-    validators.SeriesDescriptionValidator(),
-    validators.FrameOfReferenceUIDValidator(),
-    validators.SeriesNumberValidator(),
-    validators.InstanceNumberValidator(),
-    # @hoodriverheather says in EDRN/jpl.labcas.validation#31 to waive Manufacturer, ModelName, and SoftwareVersions
-    # validators.ManufacturerValidator(),
-    # validators.ModelNameValidator(),
-    # validators.SoftwareVersionsValidator(),
-    # @hoodriverheather says in #31 to waive StudyDate, ContentDate, and AcquisitionDate for ALL data
-    # validators.StudyDateValidator(),
-    # validators.ContentDateValidator(),
-    # validators.AcquisitionDateValidator(),
-    validators.AcquisitionTimeValidator(),
-    validators.ContentTimeValidator(),
-    validators.WindowCenterValidator(),
-    validators.WindowWidthValidator(),
-    validators.SliceThicknessValidator(),
-    validators.PixelSpacingValidator(),
-    validators.ImagePositionPatientValidator(),
-    validators.ImageOrientationPatientValidator(),
+    SeriesDescriptionValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+    AcquisitionTimeValidator(),
+    ContentTimeValidator(),
+]))
+
+register_profile(Profile(ProfileName.CT_STD_NEW, 'ct_std_v2', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    ImageTypeValidator(),
+    SeriesDescriptionValidator(),
+    FrameOfReferenceUIDValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+    AcquisitionTimeValidator(),
+    ContentTimeValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+    WindowCenterValidator(),
+    WindowWidthValidator(),
+    SliceThicknessValidator(),
+    PixelSpacingValidator(),
+    ImagePositionPatientValidator(),
+    ImageOrientationPatientValidator(),
+], [
+]))
+
+register_profile(Profile(ProfileName.MR_STD, 'mr_std_v1', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    ImageTypeValidator(),
+    SeriesDescriptionValidator(),
+    FrameOfReferenceUIDValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+    WindowCenterValidator(),
+    WindowWidthValidator(),
+    SliceThicknessValidator(),
+    PixelSpacingValidator(),
+    ImagePositionPatientValidator(),
+    ImageOrientationPatientValidator(),
+], [
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+    AcquisitionTimeValidator(),
+    ContentTimeValidator(),
+]))
+
+register_profile(Profile(ProfileName.MR_STD_NEW, 'mr_std_v2', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    ImageTypeValidator(),
+    SeriesDescriptionValidator(),
+    FrameOfReferenceUIDValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+    AcquisitionTimeValidator(),
+    ContentTimeValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+    SliceThicknessValidator(),
+    PixelSpacingValidator(),
+    ImagePositionPatientValidator(),
+    ImageOrientationPatientValidator(),
+], []))
+
+register_profile(Profile(ProfileName.CT_LOC, 'ct_loc_v1', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    ImageTypeValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+], [
+    SeriesDescriptionValidator(),
+    FrameOfReferenceUIDValidator(),
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+    AcquisitionTimeValidator(),
+    ContentTimeValidator(),
+    WindowCenterValidator(),
+    WindowWidthValidator(),
+    SliceThicknessValidator(),
+    PixelSpacingValidator(),
+    ImagePositionPatientValidator(),
+    ImageOrientationPatientValidator(),
+]))
+
+register_profile(Profile(ProfileName.MR_LOC, 'mr_loc_v1', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    ImageTypeValidator(),
+    SeriesDescriptionValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+], [
+    FrameOfReferenceUIDValidator(),
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+    AcquisitionTimeValidator(),
+    ContentTimeValidator(),
+    WindowCenterValidator(),
+    WindowWidthValidator(),
+    SliceThicknessValidator(),
+    PixelSpacingValidator(),
+    ImagePositionPatientValidator(),
+    ImageOrientationPatientValidator(),
+]))
+
+register_profile(Profile(ProfileName.CT_LOC_NEW, 'ct_loc_v2', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    ImageTypeValidator(),
+    SeriesDescriptionValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+], [
+    FrameOfReferenceUIDValidator(),
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+    AcquisitionTimeValidator(),
+    ContentTimeValidator(),
+    WindowCenterValidator(),
+    WindowWidthValidator(),
+    WindowCenterValidator(),
+    WindowWidthValidator(),
+    SliceThicknessValidator(),
+    PixelSpacingValidator(),
+    ImagePositionPatientValidator(),
+    ImageOrientationPatientValidator(),
 ]))
 
 
-# Derrrr-profiles; from "the spreadsheet", these are identical to each other,
-# so we'll collect the validators once and then register them for both der profiles.
+register_profile(Profile(ProfileName.MR_LOC_NEW, 'mr_loc_v2', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    ImageTypeValidator(),
+    SeriesDescriptionValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+], [
+    FrameOfReferenceUIDValidator(),
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+    AcquisitionTimeValidator(),
+    ContentTimeValidator(),
+    WindowCenterValidator(),
+    WindowWidthValidator(),
+    SliceThicknessValidator(),
+    PixelSpacingValidator(),
+    ImagePositionPatientValidator(),
+    ImageOrientationPatientValidator(),
+]))
 
-_required_der_validators = [
-    validators.SOPClassUIDValidator(),
-    validators.ModalityValidator(),
-    validators.ImageTypeValidator(),
-    validators.FrameOfReferenceUIDValidator(),
-    validators.StudyInstanceUIDValidator(),
-    validators.SeriesInstanceUIDValidator(),
-    validators.SOPInstanceUIDValidator(),
-    validators.SeriesNumberValidator(),
-    validators.InstanceNumberValidator(),
-    # @hoodriverheather says in EDRN/jpl.labcas.validation#31 to waive Manufacturer, ModelName, and SoftwareVersions
-    # validators.ManufacturerValidator(),
-    # validators.ModelNameValidator(),
-    # validators.SoftwareVersionsValidator(),
-    # @hoodriverheather says in #31 to waive StudyDate, ContentDate, and AcquisitionDate for ALL data
-    # validators.StudyDateValidator(),
-    # validators.ContentDateValidator(),
-    # validators.AcquisitionDateValidator(),
-    validators.ContentTimeValidator(),
-    validators.RowsValidator(),
-    validators.ColumnsValidator(),
-    validators.BitsAllocatedValidator(),
-    validators.BitsStoredValidator(),
-    validators.HighBitValidator(),
-    validators.PixelRepresentationValidator(),
-    validators.PhotometricInterpretationValidator(),
-]
-_optional_der_validators = [
-    validators.WindowCenterValidator(),
-    validators.WindowWidthValidator(),
-    validators.SliceThicknessValidator(),
-    validators.PixelSpacingValidator(),
-    validators.ImagePositionPatientValidator(),
-    validators.ImageOrientationPatientValidator(),
-]
-_required_der_validators_for_new_data = _required_der_validators + [
-    validators.AcquisitionTimeValidator(),
-    validators.SeriesDescriptionValidator(),
-    validators.ManufacturerValidator(),
-    validators.ModelNameValidator(),
-    validators.SoftwareVersionsValidator(),
-]
-register_profile(Profile(ProfileName.CT_DER, _required_der_validators,
-    _optional_der_validators + [validators.SeriesDescriptionValidator(), validators.AcquisitionTimeValidator()]
-))
-register_profile(Profile(ProfileName.MR_DER, _required_der_validators, _optional_der_validators))
-register_profile(Profile(ProfileName.CT_DER_NEW, _required_der_validators_for_new_data, _optional_der_validators))
-register_profile(Profile(ProfileName.MR_DER_NEW, _required_der_validators_for_new_data, _optional_der_validators))
+register_profile(Profile(ProfileName.PET_STD, 'pet_std_v1', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    ImageTypeValidator(),
+    FrameOfReferenceUIDValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+    PixelSpacingValidator(),
+    ImagePositionPatientValidator(),
+    ImageOrientationPatientValidator(),
+], [
+    SeriesDescriptionValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+    AcquisitionTimeValidator(),
+    ContentTimeValidator(),
+    WindowCenterValidator(),
+    WindowWidthValidator(),
+    SliceThicknessValidator(),
+]))
+
+register_profile(Profile(ProfileName.PET_STD_NEW, 'pet_std_v2', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    ImageTypeValidator(),
+    SeriesDescriptionValidator(),
+    FrameOfReferenceUIDValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    InstanceNumberValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+    AcquisitionTimeValidator(),
+    ContentTimeValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+    PixelSpacingValidator(),
+    ImagePositionPatientValidator(),
+    ImageOrientationPatientValidator(),
+], [
+    WindowCenterValidator(),
+    WindowWidthValidator(),
+    SliceThicknessValidator(),
+]))
+
+register_profile(Profile(ProfileName.SEG, 'seg_v1', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    FrameOfReferenceUIDValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+], [
+    ImageTypeValidator(),
+    SeriesDescriptionValidator(),
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+    AcquisitionTimeValidator(),
+    ContentTimeValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+]))
+
+register_profile(Profile(ProfileName.SEG_NEW, 'seg_v2', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    FrameOfReferenceUIDValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+], [
+    ImageTypeValidator(),
+    SeriesDescriptionValidator(),
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+    AcquisitionTimeValidator(),
+    ContentTimeValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+]))
+
+register_profile(Profile(ProfileName.SC, 'sc_v1', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+    WindowCenterValidator(),
+    WindowWidthValidator(),
+], [
+    ImageTypeValidator(),
+    SeriesDescriptionValidator(),
+    FrameOfReferenceUIDValidator(),
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+]))
+
+
+register_profile(Profile(ProfileName.SC_NEW, 'sc_v2', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+    WindowCenterValidator(),
+    WindowWidthValidator(),
+], [
+    ImageTypeValidator(),
+    SeriesDescriptionValidator(),
+    FrameOfReferenceUIDValidator(),
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+    AcquisitionTimeValidator(),
+    ContentTimeValidator(),
+]))
+
+register_profile(Profile(ProfileName.CT_DER, 'ct_der_post_v1', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    ImageTypeValidator(),
+    FrameOfReferenceUIDValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+], [
+    SeriesDescriptionValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+    AcquisitionTimeValidator(),
+    ContentTimeValidator(),
+    WindowCenterValidator(),
+    WindowWidthValidator(),
+    SliceThicknessValidator(),
+    PixelSpacingValidator(),
+    ImagePositionPatientValidator(),
+    ImageOrientationPatientValidator(),
+]))
+
+
+register_profile(Profile(ProfileName.MR_DER, 'mr_der_post_v1', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    ImageTypeValidator(),
+    SeriesDescriptionValidator(),
+    FrameOfReferenceUIDValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+    AcquisitionTimeValidator(),
+    ContentTimeValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+], [
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+    WindowCenterValidator(),
+    WindowWidthValidator(),
+    SliceThicknessValidator(),
+    PixelSpacingValidator(),
+    ImagePositionPatientValidator(),
+    ImageOrientationPatientValidator(),
+]))
+
+
+register_profile(Profile(ProfileName.CT_DER_NEW, 'ct_der_post_v2', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    ImageTypeValidator(),
+    SeriesDescriptionValidator(),
+    FrameOfReferenceUIDValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+    AcquisitionTimeValidator(),
+    ContentTimeValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+], [
+    WindowCenterValidator(),
+    WindowWidthValidator(),
+    SliceThicknessValidator(),
+    PixelSpacingValidator(),
+    ImagePositionPatientValidator(),
+    ImageOrientationPatientValidator(),
+]))
+
+register_profile(Profile(ProfileName.MR_DER_NEW, 'mr_der_post_v2', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    ImageTypeValidator(),
+    SeriesDescriptionValidator(),
+    FrameOfReferenceUIDValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+    AcquisitionTimeValidator(),
+    ContentTimeValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+], [
+    WindowCenterValidator(),
+    WindowWidthValidator(),
+    SliceThicknessValidator(),
+    PixelSpacingValidator(),
+    ImagePositionPatientValidator(),
+    ImageOrientationPatientValidator(),
+]))
+
+register_profile(Profile(ProfileName.GENERIC, None, [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+], []))

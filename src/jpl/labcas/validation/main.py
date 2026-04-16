@@ -382,7 +382,7 @@ def main():
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel, format='%(levelname)s %(message)s')
     if args.list_profiles:
-        for name in sorted(PROFILES.keys(), key=lambda n: n.value):
+        for name in sorted(PROFILES.keys(), key=lambda n: n.name):
             print(PROFILES[name], end='\n\n')
         sys.exit(0)
     _logger.info('🧵 Multiprocessing start method: %s', get_context().get_start_method())
