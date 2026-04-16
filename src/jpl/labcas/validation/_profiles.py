@@ -189,6 +189,8 @@ register_profile(Profile(ProfileName.MR_STD, 'mr_std_v1', [
     SOPInstanceUIDValidator(),
     SeriesNumberValidator(),
     InstanceNumberValidator(),
+    AcquisitionTimeValidator(),
+    ContentTimeValidator(),
     RowsValidator(),
     ColumnsValidator(),
     BitsAllocatedValidator(),
@@ -206,8 +208,6 @@ register_profile(Profile(ProfileName.MR_STD, 'mr_std_v1', [
     ManufacturerValidator(),
     ModelNameValidator(),
     SoftwareVersionsValidator(),
-    AcquisitionTimeValidator(),
-    ContentTimeValidator(),
 ]))
 
 register_profile(Profile(ProfileName.MR_STD_NEW, 'mr_std_v2', [
