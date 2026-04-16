@@ -19,5 +19,10 @@ MINIMUM_FILE_SIZE = int(7.5 * 1024)
 
 # Minimum number of rows and columns for MR localizer files
 # See EDRN/jpl.labcas.validation#31 for more details
+#
+# Ah but @hoodriverheather says in https://github.com/EDRN/jpl.labcas.validation/issues/31#issuecomment-4256524804
+# That they should not be skipped so there's no need for these constants anymore.
+#
+# Why are they even called out in the spreadsheet?
 MINIMUM_MR_LOC_ROWS = 96
 MINIMUM_MR_LOC_COLUMNS = 96

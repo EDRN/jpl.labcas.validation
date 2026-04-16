@@ -1,0 +1,10 @@
+---
+description: Always ignore Python virtual environment files
+alwaysApply: true
+---
+
+# Ignore Virtual Environment
+
+- Treat `.venv/` and all descendants (`.venv/**`) as out of scope for exploration, edits, lint fixes, and code review.
+- Never read, modify, or suggest changes in `.venv/`.
+- Assume `.venv/` is generated environment state and not part of project source.

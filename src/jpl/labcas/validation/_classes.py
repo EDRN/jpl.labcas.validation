@@ -74,6 +74,12 @@ class Validator(ABC):
         raise NotImplementedError(f'{self.__class__.__name__} must implement the «validate» method')
 
 
+    def __str__(self) -> str:
+        return self.__class__.__name__
+    
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}(description={self.description}, tag={self.tag})'
+
 class Report:
     '''A report of findings.
     

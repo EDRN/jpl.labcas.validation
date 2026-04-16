@@ -95,7 +95,7 @@ The following describes how to use this program.
 
 The easiest way to run this is:
 
-    validate-dicom-files <directory>
+    validate-dicom-files <directory>/.../<collection-folder>
 
 the `<directory>` should eventually contain the following directory hierarchy:
 

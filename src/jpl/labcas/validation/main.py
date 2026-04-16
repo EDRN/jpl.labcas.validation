@@ -28,12 +28,12 @@ from ._argparse import add_standard_argparse_options
 from ._classes import Report
 from ._files import PotentialFile
 from ._findings import Finding, ErrorFinding
-from ._profiles import get_profile, ProfileName
+from ._profiles import get_profile, ProfileName, PROFILES
 from ._functions import check_directory, iterate_paths
 from .const import PHI_PII_THRESHOLD, MINIMUM_FILE_SIZE, MINIMUM_MR_LOC_ROWS, MINIMUM_MR_LOC_COLUMNS
 from .phi_pii_recognizers import PHI_PII_RECOGNIZERS, DEFAULT_PHI_PII_RECOGNIZER
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from multiprocessing import cpu_count, Manager
+from multiprocessing import cpu_count, get_context
 from typing import Iterable
 import argparse, sys, logging, os, pydicom, pysolr, os.path, tempfile, sqlite3, threading, traceback, humanize
 
@@ -128,9 +128,11 @@ def _scan_one(potential_file: PotentialFile, for_new_data: bool = False) -> int 
                 score=1.0,
                 error_message=f'Skipping file because it is unexpectedly small; file size is {potential_file.file_size} bytes but require a minimum of {MINIMUM_FILE_SIZE} bytes'
             )]
-        elif profile_name in (ProfileName.MR_LOC, ProfileName.MR_LOC_NEW) and (potential_file.rows < MINIMUM_MR_LOC_ROWS or potential_file.columns < MINIMUM_MR_LOC_COLUMNS):
-            _logger.warning('🖼️ Skipping file %s because it is a small matrix helper file', potential_file)
-            findings = []
+        # See https://github.com/EDRN/jpl.labcas.validation/issues/31#issuecomment-4256524804;
+        # These should not be skipped … not sure why the spreadsheet even calls them out
+        # elif profile_name in (ProfileName.MR_LOC, ProfileName.MR_LOC_NEW) and (potential_file.rows < MINIMUM_MR_LOC_ROWS or potential_file.columns < MINIMUM_MR_LOC_COLUMNS):
+        #     _logger.warning('🖼️ Skipping file %s because it is a small matrix helper file', potential_file)
+        #     findings = []
         else:
             # Okay, full validation time
             findings: set[Finding] = set()
@@ -199,62 +201,6 @@ def _create_findings_db(db_path: str):
         conn.close()
 
 
-def _load_findings_from_db(db_path: str) -> list[Finding]:
-    '''Load all findings from the database and reconstruct Finding objects.'''
-    from ._findings import ErrorFinding, ValidationFinding, HeaderFinding, ImageFinding, WarningFinding
-    from ._files import PotentialFile
-    from pydicom.tag import Tag
-    
-    findings = []
-    conn = sqlite3.connect(db_path, timeout=30.0)
-    try:
-        cursor = conn.execute('''
-            SELECT file_path, site_id, event_id, file_name, finding_type, value, score, tag, description, pattern, index_val
-            FROM findings
-        ''')
-        for row in cursor:
-            file_path, site_id, event_id, file_name, finding_type, value, score, tag, description, pattern, index_val = row
-            potential_file = PotentialFile(file_path, site_id=site_id, event_id=event_id)
-            
-            # Reconstruct Tag object if present (stored as "group,element")
-            tag_obj = None
-            if tag:
-                try:
-                    # Tag is stored as "group,element" (e.g., "16,16" for 0x0010,0x0010)
-                    parts = tag.split(',')
-                    if len(parts) == 2:
-                        group = int(parts[0])
-                        element = int(parts[1])
-                        tag_obj = Tag((group, element))
-                except (ValueError, TypeError) as ex:
-                    _logger.debug('Could not reconstruct tag from "%s": %s', tag, ex)
-                    pass
-            
-            # Reconstruct the appropriate Finding subclass
-            finding = None
-            if finding_type == 'ErrorFinding':
-                finding = ErrorFinding(file=potential_file, value=value, score=score, error_message=description)
-            elif finding_type == 'ValidationFinding':
-                finding = ValidationFinding(file=potential_file, value=value, score=score, tag=tag_obj, description=description)
-            elif finding_type == 'HeaderFinding':
-                finding = HeaderFinding(file=potential_file, value=value, score=score, tag=tag_obj, description=description)
-            elif finding_type == 'ImageFinding':
-                finding = ImageFinding(file=potential_file, value=value, score=score, pattern=pattern or 'unknown', index=index_val or -1)
-            elif finding_type == 'WarningFinding':
-                finding = WarningFinding(file=potential_file, value=value, score=score, tag=tag_obj, description=description)
-            else:
-                # Unknown finding type - log warning and skip
-                _logger.warning('⚠️ Unknown finding type "%s" for file %s, skipping', finding_type, file_path)
-                continue
-            
-            if finding:
-                findings.append(finding)
-    finally:
-        conn.close()
-    
-    return findings
-
-
 def validate_pool(
     recognizer_name: str, args: argparse.Namespace, concurrency: int, file_generator,
     for_new_data: bool = False
@@ -280,34 +226,35 @@ def validate_pool(
     # Create the database schema
     _create_findings_db(db_path)
     
-    # Shared lock so only one worker writes to SQLite at a time (avoids "database is locked")
-    with Manager() as manager:
-        db_write_lock = manager.Lock()
-        try:
-            with ProcessPoolExecutor(
-                max_workers=concurrency,
-                initializer=_init_worker,
-                initargs=(recognizer_name, args_dict, db_path, db_write_lock),
-            ) as executor:
-                futures = (executor.submit(_scan_one, p, for_new_data) for p in file_generator())
-                total_findings = 0
-                try:
-                    for future in as_completed(futures, timeout=None):
-                        count = future.result()
-                        total_findings += count
-                except KeyboardInterrupt:
-                    # executor will clean up children on context exit
-                    pass
-            
-            _logger.info('📊 Processed %d findings, stored in database', total_findings)
-            return db_path, total_findings
-        except Exception as ex:
-            # Clean up database on error
+    # Use a process-shared lock from multiprocessing context instead of Manager().
+    # This avoids spinning up a manager server process and related tempdir cleanup.
+    ctx = get_context()
+    db_write_lock = ctx.Lock()
+    try:
+        with ProcessPoolExecutor(
+            max_workers=concurrency,
+            initializer=_init_worker,
+            initargs=(recognizer_name, args_dict, db_path, db_write_lock),
+        ) as executor:
+            futures = (executor.submit(_scan_one, p, for_new_data) for p in file_generator())
+            total_findings = 0
             try:
-                os.remove(db_path)
-            except Exception:
+                for future in as_completed(futures, timeout=None):
+                    count = future.result()
+                    total_findings += count
+            except KeyboardInterrupt:
+                # executor will clean up children on context exit
                 pass
-            raise
+        
+        _logger.info('📊 Processed %d findings, stored in database', total_findings)
+        return db_path, total_findings
+    except Exception as ex:
+        # Clean up database on error
+        try:
+            os.remove(db_path)
+        except Exception:
+            pass
+        raise
 
 
 def validate_single(
@@ -416,15 +363,21 @@ def main():
         '-o', '--output', default='.', help='Output directory for CSV files (defaults to the current directory)'
     )
     parser.add_argument(
-        '-f', '--findings-db',
-        help='Path to SQLite database of findings; if given the scan is skipped and this database is used instead to report on'
+        '-n', '--new-data', action='store_true', help='Scan for new data (subject to stricter checks; default False)'
     )
     parser.add_argument(
-        '-n', '--new-data', action='store_true', help='Scan for new data (subject to stricter checks; default False)'
+        '--list-profiles',
+        action='store_true',
+        help='Print all known validation profiles and exit (no scan)',
     )
     parser.add_argument('directory', nargs='?', help='Directory to scan for DICOM files which typically ends in a collection name like "Prostate_MRI"')
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel, format='%(levelname)s %(message)s')
+    if args.list_profiles:
+        for name in sorted(PROFILES.keys(), key=lambda n: n.value):
+            print(PROFILES[name], end='\n\n')
+        sys.exit(0)
+    _logger.info('🧵 Multiprocessing start method: %s', get_context().get_start_method())
     output_directory = args.output.strip()
     os.makedirs(output_directory, exist_ok=True)
     if args.url:
@@ -439,15 +392,11 @@ def main():
         solr_url = None
         file_generator = _create_non_solr_paths_iterator(args.directory)
 
-    db_path = args.findings_db.strip() if args.findings_db else None
-    if db_path:
-        _logger.info('🔍 Using SQLite database for findings: %s', db_path)
-        report = Report(db_path=db_path, score=args.score)
-        report.generate_report(output_directory, for_new_data=args.new_data)
-    elif not args.directory:
+    db_path = None
+    if not args.directory:
         _logger.error('💥 No directory provided')
         sys.exit(1)
-    else:  # No database path provided, so we need to scan the files
+    else:
         check_directory(args.directory)
         _logger.info('🔍 Scanning directory: %s', args.directory)
         try:
@@ -465,7 +414,10 @@ def main():
             report.generate_report(output_directory, for_new_data=args.new_data)
         finally:
             if db_path:
-                _logger.info('Database findings preserved in %s', db_path)
+                try:
+                    os.remove(db_path)
+                except OSError as ex:
+                    _logger.warning('⚠️ Could not remove temporary findings database %s: %s', db_path, ex)
         
     sys.exit(0)
 

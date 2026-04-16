@@ -75,6 +75,24 @@ class Profile:
                     )
                 findings.add(finding)
         return sorted(list[Finding](findings))
+    
+    def __str__(self) -> str:
+        rc = f'### Profile "{self.name}"\n\nRequired validators:\n\n'
+        if not self.required_validators:
+            rc += 'None defined\n'
+        else:
+            for validator in sorted(self.required_validators, key=str):
+                rc += f'- {validator}\n'
+        rc += '\n\nOptional validators:\n\n'
+        if not self.optional_validators:
+            rc += 'None defined\n'
+        else:
+            for validator in sorted(self.optional_validators, key=str):
+                rc += f'- {validator}\n'
+        return rc
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}(name={self.name})'
 
 
 def register_profile(p: Profile):
@@ -98,7 +116,8 @@ _all_ct_required_validators = [
     validators.SOPClassUIDValidator(),
     validators.ModalityValidator(),
     validators.ImageTypeValidator(),
-    validators.SeriesDescriptionValidator(),
+    # @hoodriverheather says in #31 that SeriesDescription is optional for all CT for old data
+    # validators.SeriesDescriptionValidator(),
     validators.FrameOfReferenceUIDValidator(),
     validators.StudyInstanceUIDValidator(),
     validators.SeriesInstanceUIDValidator(),
@@ -130,11 +149,19 @@ _all_ct_required_validators = [
     validators.ImageOrientationPatientValidator(),
 ]
 _all_ct_required_validators_for_new_data = _all_ct_required_validators + [
+    validators.SeriesDescriptionValidator(),
     validators.ManufacturerValidator(),
     validators.ModelNameValidator(),
     validators.SoftwareVersionsValidator(),
 ]
-register_profile(Profile(ProfileName.CT_STD, _all_ct_required_validators, []))
+register_profile(Profile(ProfileName.CT_STD, _all_ct_required_validators, [
+    validators.SeriesDescriptionValidator(),
+    validators.ManufacturerValidator(),
+    validators.ModelNameValidator(),
+    validators.SoftwareVersionsValidator(),
+    validators.AcquisitionTimeValidator(),
+    validators.ContentTimeValidator(),
+]))
 register_profile(Profile(ProfileName.CT_STD_NEW, _all_ct_required_validators_for_new_data, []))
 
 _all_mr_required_validators = [
@@ -186,7 +213,6 @@ _required_loc_validators = [
     validators.SOPClassUIDValidator(),
     validators.ModalityValidator(),
     validators.ImageTypeValidator(),
-    validators.SeriesDescriptionValidator(),
     validators.StudyInstanceUIDValidator(),
     validators.SeriesInstanceUIDValidator(),
     validators.SOPInstanceUIDValidator(),
@@ -197,6 +223,9 @@ _required_loc_validators = [
     validators.HighBitValidator(),
     validators.PixelRepresentationValidator(),
     validators.PhotometricInterpretationValidator(),    
+]
+_required_loc_validators_for_new_data = _required_loc_validators + [
+    validators.SeriesDescriptionValidator(),
 ]
 _optional_loc_validators = [
     validators.FrameOfReferenceUIDValidator(),
@@ -225,10 +254,12 @@ _optional_loc_validators_for_new_data = _optional_loc_validators + [
     validators.SoftwareVersionsValidator(),
 ]
 
-register_profile(Profile(ProfileName.CT_LOC, _required_loc_validators, _optional_loc_validators,))
+register_profile(Profile(ProfileName.CT_LOC, _required_loc_validators,
+    _optional_loc_validators + [validators.SeriesDescriptionValidator()]
+))
 register_profile(Profile(ProfileName.MR_LOC, _required_loc_validators, _optional_loc_validators,))
-register_profile(Profile(ProfileName.CT_LOC_NEW, _required_loc_validators, _optional_loc_validators_for_new_data,))
-register_profile(Profile(ProfileName.MR_LOC_NEW, _required_loc_validators, _optional_loc_validators_for_new_data,))
+register_profile(Profile(ProfileName.CT_LOC_NEW, _required_loc_validators_for_new_data, _optional_loc_validators_for_new_data))
+register_profile(Profile(ProfileName.MR_LOC_NEW, _required_loc_validators, _optional_loc_validators_for_new_data))
 
 # PET_STD is similar to CT_STD and MR_STD … but has 3 different optional validators
 _pet_std_validators = [
@@ -404,7 +435,6 @@ _required_der_validators = [
     validators.SOPClassUIDValidator(),
     validators.ModalityValidator(),
     validators.ImageTypeValidator(),
-    validators.SeriesDescriptionValidator(),
     validators.FrameOfReferenceUIDValidator(),
     validators.StudyInstanceUIDValidator(),
     validators.SeriesInstanceUIDValidator(),
@@ -419,7 +449,6 @@ _required_der_validators = [
     # validators.StudyDateValidator(),
     # validators.ContentDateValidator(),
     # validators.AcquisitionDateValidator(),
-    validators.AcquisitionTimeValidator(),
     validators.ContentTimeValidator(),
     validators.RowsValidator(),
     validators.ColumnsValidator(),
@@ -438,11 +467,15 @@ _optional_der_validators = [
     validators.ImageOrientationPatientValidator(),
 ]
 _required_der_validators_for_new_data = _required_der_validators + [
+    validators.AcquisitionTimeValidator(),
+    validators.SeriesDescriptionValidator(),
     validators.ManufacturerValidator(),
     validators.ModelNameValidator(),
     validators.SoftwareVersionsValidator(),
 ]
-register_profile(Profile(ProfileName.CT_DER, _required_der_validators, _optional_der_validators))
+register_profile(Profile(ProfileName.CT_DER, _required_der_validators,
+    _optional_der_validators + [validators.SeriesDescriptionValidator(), validators.AcquisitionTimeValidator()]
+))
 register_profile(Profile(ProfileName.MR_DER, _required_der_validators, _optional_der_validators))
 register_profile(Profile(ProfileName.CT_DER_NEW, _required_der_validators_for_new_data, _optional_der_validators))
 register_profile(Profile(ProfileName.MR_DER_NEW, _required_der_validators_for_new_data, _optional_der_validators))
