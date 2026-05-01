@@ -105,6 +105,13 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         'URL': re.compile(r'\bhttps?://[^\s]+', re.IGNORECASE),
     }
 
+    # Pixel OCR often collapses overlay text, so burned-in DICOM labels may appear
+    # without spaces (for example, "PatientID:123" or "PatientName(...):DOE").
+    _pixel_patterns = _patterns | {
+        'PatientID_label': re.compile(r'Patient\s*ID\s*[:#]?\s*[A-Z0-9._%+\-]{3,}', re.IGNORECASE),
+        'PatientName_label': re.compile(r'Patient\s*Name(?:\([A-Za-z -]+\))?\s*[:#]?\s*[A-Z][A-Z0-9^_\-]{2,}', re.IGNORECASE),
+    }
+
     # We don't treat institition names as PHI/PII; flip this if necessary
     _suppress_institution_names = True
 
@@ -227,7 +234,7 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         for idx, frame in enumerate(frames):
             text, boxes = self._recognize_characters(frame)        
             if not text: continue
-            for key, rx in self._patterns.items():
+            for key, rx in self._pixel_patterns.items():
                 for m in rx.finditer(text):
                     excerpt = text[max(0, m.start() - 24):m.end() + 24]  # Grab 24 characters of context on each side
                     # Skip anonymized values (starts with "anon" or matches "Doe John" patterns)
