@@ -113,11 +113,19 @@ def _scan_one(potential_file: PotentialFile, for_new_data: bool = False) -> int 
     try:
         profile_name = potential_file.profile_name(for_new_data)
         if profile_name is None or profile_name in (ProfileName.GENERIC, ProfileName.NULL, ProfileName.MISSING_IMAGE_TYPE):
-            # Short circuit: not a recognized DICOM file (non-DICOM or unrecognized profile).
-            # Do not add to report — we want only DICOM files in the report.
-            # Do not check file size here — that applies only to recognized DICOM files.
-            _logger.warning('🤷 Skipping file %s because it does not have a recognized profile (excluding from report)', potential_file)
-            findings = []
+            # For files we can parse as DICOM, report unrecognized profile (e.g., garbled SOPClassUID).
+            # For non-DICOM or unreadable files, continue to skip and keep reports DICOM-focused.
+            if potential_file.is_readable_dicom():
+                _logger.warning('🤷 Reporting file %s because it is DICOM but does not match a recognized profile', potential_file)
+                findings = [ErrorFinding(
+                    file=potential_file,
+                    value='FAIL! Cannot determine profile',
+                    score=1.0,
+                    error_message='DICOM file does not match a recognized profile (for example, garbled SOPClassUID)'
+                )]
+            else:
+                _logger.warning('🤷 Skipping file %s because it is not readable as DICOM (excluding from report)', potential_file)
+                findings = []
         elif potential_file.file_size < MINIMUM_FILE_SIZE:
             # File size heuristic: only for recognized DICOM files; non-DICOM files are handled above
             _logger.warning('🤷 Skipping file %s because it is unexpectedly small', potential_file)
@@ -364,7 +372,8 @@ def main():
         '-u', '--url', help='URL to LabCAS Solr (optional; if not provided, files will not be confirmed published)'
     )
     parser.add_argument(
-        '-o', '--output', default='.', help='Output directory for CSV files (defaults to the current directory)'
+        '-o', '--output', default='.',
+        help='Output directory for CSV files (defaults to .); typically --output reports/Prostate_MRI etc.'
     )
     parser.add_argument(
         '-n', '--new-data', action='store_true', help='Scan for new data (subject to stricter checks; default False)'
@@ -378,7 +387,7 @@ def main():
         '--subset',
         help='Optional site subdirectory under directory to scan (example: Images_Site_uDUsCV9ikmtw)',
     )
-    parser.add_argument('directory', nargs='?', help='Directory to scan for DICOM files which typically ends in a collection name like "Prostate_MRI"')
+    parser.add_argument('directory', nargs='?', help='Directory to scan for DICOM files')
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel, format='%(levelname)s %(message)s')
     if args.list_profiles:

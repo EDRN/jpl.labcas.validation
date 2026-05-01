@@ -186,6 +186,14 @@ class PotentialFile:
                 self._profile_names[for_new_data] = ProfileName.GENERIC
         return self._profile_names[for_new_data]
 
+    def is_readable_dicom(self) -> bool:
+        '''Return True when the file can be parsed as DICOM metadata.'''
+        try:
+            self.dcmread(stop_before_pixels=True, force=False)
+            return True
+        except Exception:
+            return False
+
     def __repr__(self) -> str:
         '''Return a convenient representation of the potential file.'''
         return (
