@@ -1,0 +1,11 @@
+---
+description: Python command runtime for this project
+alwaysApply: true
+---
+
+# Python Runtime
+
+- For Python commands in this repository, use `${workspaceFolder}/.venv/bin/python`.
+- Do not use system Python, Homebrew Python, or bare `python`/`python3` unless the user explicitly requests it.
+- Treat `.venv/` as out of scope for reading or editing, but it is allowed to execute `.venv/bin/python` and installed console scripts.
+- If dependency resolution fails, report that the virtualenv needs updating instead of switching interpreters.
