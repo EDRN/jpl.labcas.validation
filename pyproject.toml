@@ -9,6 +9,7 @@ dependencies = [
     'pylibjpeg[all] ~= 2.1.0',
     'pillow ~= 12.0.0',
     'pysolr ~= 3.10.0',
+    'tqdm ~= 4.67.1',
 ]
 authors = [
     {name = 'Sean Kelly', email='kelly@seankelly.biz'}

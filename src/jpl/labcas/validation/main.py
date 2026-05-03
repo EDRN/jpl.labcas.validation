@@ -34,8 +34,10 @@ from .const import PHI_PII_THRESHOLD, MINIMUM_FILE_SIZE, MINIMUM_MR_LOC_ROWS, MI
 from .phi_pii_recognizers import PHI_PII_RECOGNIZERS, DEFAULT_PHI_PII_RECOGNIZER
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count, get_context
+from tqdm import tqdm
+from tqdm.contrib.logging import logging_redirect_tqdm
 from typing import Iterable
-import argparse, sys, logging, os, pydicom, pysolr, os.path, tempfile, sqlite3, threading, traceback, humanize
+import argparse, sys, logging, os, pydicom, pysolr, os.path, tempfile, sqlite3, threading, traceback, humanize, warnings
 
 
 __doc__ = '🛂 EDRN DICOM Validation: check for PHI/PII and compliance with EDRN core and MR requirements for DICOM tags'
@@ -45,6 +47,47 @@ _recognizer = None  # The one recognizer we'll need for all workers for all file
 _logger = logging.getLogger(__name__)
 _db_path = None  # Path to SQLite database for storing findings
 _db_lock = None  # Lock for database access (thread lock in single-process; shared process lock in multi-process)
+_default_showwarning = warnings.showwarning
+
+
+def _configure_logging(loglevel: int, log_file: str | None = None, console_level: int | None = None):
+    '''Configure logging so console output does not corrupt tqdm progress bars.'''
+    formatter = logging.Formatter('%(levelname)s %(message)s')
+    handlers: list[logging.Handler] = []
+
+    if log_file:
+        log_directory = os.path.dirname(os.path.abspath(log_file))
+        os.makedirs(log_directory, exist_ok=True)
+        file_handler = logging.FileHandler(log_file, encoding='utf-8')
+        file_handler.setLevel(loglevel)
+        file_handler.setFormatter(formatter)
+        handlers.append(file_handler)
+
+    console_handler = logging.StreamHandler()
+    if console_level is None:
+        console_level = logging.ERROR if log_file else loglevel
+    console_handler.setLevel(console_level)
+    console_handler.setFormatter(formatter)
+    handlers.append(console_handler)
+
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+    root_logger.setLevel(min(handler.level for handler in handlers))
+    for handler in handlers:
+        root_logger.addHandler(handler)
+
+    if log_file:
+        warnings.showwarning = _showwarning_without_pydicom
+    else:
+        warnings.showwarning = _default_showwarning
+
+
+def _showwarning_without_pydicom(message, category, filename, lineno, file=None, line=None):
+    '''Suppress pydicom's stderr warning copy; pydicom also logs these messages.'''
+    normalized = filename.replace('\\', '/')
+    if '/pydicom/' in normalized:
+        return
+    _default_showwarning(message, category, filename, lineno, file=file, line=line)
 
 
 def _score_type(value: str) -> float:
@@ -58,7 +101,9 @@ def _score_type(value: str) -> float:
         raise argparse.ArgumentTypeError(f'{value} is not a valid floating point number')
 
 
-def _init_worker(recognizer_name: str, recognizer_args: dict, db_path: str = None, db_write_lock=None):
+def _init_worker(
+    recognizer_name: str, recognizer_args: dict, db_path: str = None, db_write_lock=None, quiet_console: bool = False
+):
     '''Initialize the worker by instantiating the global recognizer by name and its needed arguments.
     
     Args:
@@ -69,7 +114,8 @@ def _init_worker(recognizer_name: str, recognizer_args: dict, db_path: str = Non
     '''
     global _recognizer, _db_path, _db_lock
     # Configure logging for this worker process to match the parent process
-    logging.basicConfig(level=recognizer_args.get('loglevel', logging.INFO), format='%(levelname)s %(message)s')
+    console_level = logging.ERROR if quiet_console else None
+    _configure_logging(recognizer_args.get('loglevel', logging.INFO), recognizer_args.get('log_file'), console_level)
     _recognizer = PHI_PII_RECOGNIZERS[recognizer_name](argparse.Namespace(**recognizer_args))
     _db_path = db_path
     _db_lock = db_write_lock if db_path else None  # Shared cross-process lock when using database
@@ -242,14 +288,16 @@ def validate_pool(
         with ProcessPoolExecutor(
             max_workers=concurrency,
             initializer=_init_worker,
-            initargs=(recognizer_name, args_dict, db_path, db_write_lock),
+            initargs=(recognizer_name, args_dict, db_path, db_write_lock, True),
         ) as executor:
-            futures = (executor.submit(_scan_one, p, for_new_data) for p in file_generator())
+            futures = [executor.submit(_scan_one, p, for_new_data) for p in file_generator()]
             total_findings = 0
             try:
-                for future in as_completed(futures, timeout=None):
-                    count = future.result()
-                    total_findings += count
+                completed = as_completed(futures, timeout=None)
+                with tqdm(completed, total=len(futures), desc='Validating files', unit='file', dynamic_ncols=True) as progress:
+                    for future in progress:
+                        count = future.result()
+                        total_findings += count
             except KeyboardInterrupt:
                 # executor will clean up children on context exit
                 pass
@@ -275,7 +323,7 @@ def validate_single(
     '''
     _init_worker(recognizer_name, vars(args), db_path=None)  # No database for single-process mode
     results: list[Finding] = []
-    for path in file_generator():
+    for path in tqdm(file_generator(), desc='Validating files', unit='file', dynamic_ncols=True):
         findings = _scan_one(path, for_new_data)
         if isinstance(findings, list):
             results.extend(findings)
@@ -389,7 +437,7 @@ def main():
     )
     parser.add_argument('directory', nargs='?', help='Directory to scan for DICOM files')
     args = parser.parse_args()
-    logging.basicConfig(level=args.loglevel, format='%(levelname)s %(message)s')
+    _configure_logging(args.loglevel, args.log_file)
     if args.list_profiles:
         for name in sorted(PROFILES.keys(), key=lambda n: n.name):
             print(PROFILES[name], end='\n\n')
@@ -428,17 +476,18 @@ def main():
     if args.subset:
         _logger.info('🔍 Subset filter active: %s', args.subset.strip())
     try:
-        if args.concurrency == 1:
-            findings = validate_single(args.recognizer, args, file_generator, args.new_data)
-            _logger.info('🔍 Found %d findings', len(findings))
-            report = Report(findings=findings, score=args.score)
-        else:
-            db_path, total_findings = validate_pool(
-                args.recognizer, args, args.concurrency, file_generator, args.new_data
-            )
-            _logger.info('🔍 Found %d findings', total_findings)
-            report = Report(db_path=db_path, score=args.score)
-            _logger.info('🔍 Wrote database in: %s', db_path)
+        with logging_redirect_tqdm():
+            if args.concurrency == 1:
+                findings = validate_single(args.recognizer, args, file_generator, args.new_data)
+                _logger.info('🔍 Found %d findings', len(findings))
+                report = Report(findings=findings, score=args.score)
+            else:
+                db_path, total_findings = validate_pool(
+                    args.recognizer, args, args.concurrency, file_generator, args.new_data
+                )
+                _logger.info('🔍 Found %d findings', total_findings)
+                report = Report(db_path=db_path, score=args.score)
+                _logger.info('🔍 Wrote database in: %s', db_path)
         report.generate_report(output_directory, for_new_data=args.new_data)
     finally:
         if db_path:

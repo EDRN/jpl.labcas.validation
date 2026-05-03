@@ -27,6 +27,10 @@ def add_logging_argparse_options(parser):
         dest='loglevel',
         help="Don't log anything except warnings and critically-important messages",
     )
+    parser.add_argument(
+        '--log-file',
+        help='Write detailed log messages to this file; when set, only errors and critical messages are also written to stderr',
+    )
 
 
 def add_standard_argparse_options(parser):

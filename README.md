@@ -119,9 +119,12 @@ Use `--help` to get more details, but summarizing:
   - `simple-scoring` (default): Pattern-based detection
   - `accepting`: Accept all files
   - `rejecting`: Reject all files
-- `-o, --output <file>`: Output file for report (default: report.md)
-- `-v, --verbose`: Verbose logging
+- `-o, --output <dir>`: Output directory for CSV reports (default: current directory)
+- `--log-file <file>`: Write detailed logs to a file while keeping the progress bar readable
+- `-d, --debug`: Debug logging
 - `-q, --quiet`: Quiet logging
+
+Validation shows a progress bar on stderr. Without `--log-file`, normal log messages are routed through tqdm so they do not garble the progress display. With `--log-file`, detailed logs go to the file and only errors and critical messages are also shown on stderr.
 
 ### 📝 Examples
 
