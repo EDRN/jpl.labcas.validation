@@ -275,7 +275,7 @@ def validate_pool(
     db_file = tempfile.NamedTemporaryFile(prefix='labcas_validation_findings_', suffix='.db', delete=False)
     db_path = db_file.name
     db_file.close()
-    _logger.info('📁 Using SQLite database for findings: %s', db_path)
+    _logger.debug('📁 Using SQLite database for findings: %s', db_path)
     
     # Create the database schema
     _create_findings_db(db_path)
@@ -487,7 +487,7 @@ def main():
                 )
                 _logger.info('🔍 Found %d findings', total_findings)
                 report = Report(db_path=db_path, score=args.score)
-                _logger.info('🔍 Wrote database in: %s', db_path)
+                _logger.debug('🔍 Wrote database in: %s', db_path)
         report.generate_report(output_directory, for_new_data=args.new_data)
     finally:
         if db_path:
