@@ -1,11 +1,11 @@
 # 🛂 EDRN DICOM Validation
 
-A validation tool for DICOM files used by the Laboratory Catalog and Archive Service (LabCAS) of the Early Detection Research Network (EDRN). This program ensures that DICOM files:
+This is the [DICOM](https://www.dicomstandard.org) validation tool for the [Laboratory Catalog and Archive Service](https://edrn-labcas.jpl.nasa.gov/) (LabCAS). It ensures that DICOM files:
 
 - **Contain little-to-no PHI/PII** — Scans both DICOM headers and pixel data for protected health information (PHI) and personally identifiable information (PII)
-- **Adhere to EDRN requirements** — Validates DICOM tags against the [EDRN core and MR requirements](https://docs.google.com/spreadsheets/d/1oQB0EoeajxFagSrIzF_8hOIc6hbC9MiMvhbYLfr6vPQ/edit?pli=1&gid=1779958583#gid=1779958583)
+- **Adhere to EDRN requirements** — Validates DICOM tags against the [EDRN core validation spreadsheet](https://docs.google.com/spreadsheets/d/1oQB0EoeajxFagSrIzF_8hOIc6hbC9MiMvhbYLfr6vPQ/edit?pli=1&gid=1779958583#gid=1779958583)
 
-This tool was developed in response to [EDRN/EDRN-metadata#160](https://github.com/EDRN/EDRN-metadata/issues/160).
+This tool was originally developed in response to [EDRN/EDRN-metadata#160](https://github.com/EDRN/EDRN-metadata/issues/160).
 
 
 ## 🎯 Features
@@ -16,17 +16,19 @@ This program has features described in the following subsections.
 ### 🔍 PHI/PII Detection
 
 - **Header-based detection**: Scans DICOM metadata tags for identifiers including:
-  - Patient names, birth dates, addresses
-  - Physician and operator names
-  - Email addresses, phone numbers, SSNs
-  - Medical record numbers (MRNs)
-- **Pixel-based detection**: Uses OCR (Tesseract) to detect text embedded in DICOM images
+    - Patient names, birth dates, addresses
+    - Physician and operator names
+    - Email addresses, phone numbers, SSNs
+    - Medical record numbers (MRNs)
+- **Pixel-based detection**: Uses OCR (via [Tesseract](https://tesseract-ocr.github.io)) to detect text embedded in DICOM images
 - **Multiple recognizers**: Choose between different PHI/PII detection algorithms:
-  - `simple-scoring` (default): Pattern-based detection with configurable scoring
-  - `accepting`: Accepts all files (testing only)
-  - `rejecting`: Rejects all files (testing only)
+    - `simple-scoring` (default): Pattern-based detection with configurable scoring
+    - `accepting`: Accepts all files (usually used for testing only)
+    - `rejecting`: Rejects all files (used for testing only)
+
 
 ### ✅ DICOM Tag Validation
+
 Validates over 40 DICOM tags against EDRN requirements including:
 
 - **Study/Series/Image Identification**: UIDs, instance numbers, SOP class
@@ -38,12 +40,13 @@ Validates over 40 DICOM tags against EDRN requirements including:
 
 ### 📊 Reporting
 
-Generates detailed Markdown reports organized by:
+Generates CSV reports organized by:
 
 - Site ID
 - Event ID  
 - File name
 - Finding type and severity score
+
 
 ## 📦 Installation
 
@@ -89,6 +92,13 @@ pip install --editable .
 ## 🚀 Usage
 
 The following describes how to use this program.
+
+
+### 📀 Preparing DICOM Files
+
+DICOM files should be arranged in a way that mirrors the expectations of LabCAS, which arranges files into folders in a specific hierarchy, described below:
+
+```
 
 
 ### 💻 Basic Usage
