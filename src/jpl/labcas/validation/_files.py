@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 import pydicom, re, os.path, logging
 from pydicom import datadict
+from .const import NON_IMAGE_SOP_CLASS_UIDS
 
 _logger = logging.getLogger(__name__)
 
@@ -168,6 +169,10 @@ class PotentialFile:
             return ProfileName.SC_NEW if for_new_data else ProfileName.SC
         elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.66.4'):
             return ProfileName.SEG_NEW if for_new_data else ProfileName.SEG
+        elif sop_class_uid in NON_IMAGE_SOP_CLASS_UIDS:
+            return ProfileName.NON_IMAGE_DICOM_NEW if for_new_data else ProfileName.NON_IMAGE_DICOM
+        elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.88'):
+            return ProfileName.OTHER_IMAGE_NEW if for_new_data else ProfileName.OTHER_IMAGE
 
         return ProfileName.GENERIC
 

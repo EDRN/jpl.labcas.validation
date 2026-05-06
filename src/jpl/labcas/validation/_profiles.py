@@ -22,27 +22,31 @@ _logger = logging.getLogger(__name__)
 
 class ProfileName(Enum):
     '''The name of a profile.'''
-    NULL               = 'null'
-    CT_LOC             = 'CT localizer'
-    CT_LOC_NEW         = 'CT localizer (for new data)'
-    CT_STD             = 'CT standard'
-    CT_STD_NEW         = 'CT standard (for new data)'
-    MR_LOC             = 'MR localizer'
-    MR_LOC_NEW         = 'MR localizer (for new data)'
-    MR_STD             = 'MR standard'
-    MR_STD_NEW         = 'MR standard (for new data)'
-    PET_STD            = 'PET standard'
-    PET_STD_NEW        = 'PET standard (for new data)'
-    CT_DER             = 'CT derived or post-processed'
-    CT_DER_NEW         = 'CT derived or post-processed (for new data)'
-    MR_DER             = 'MR derived or post-processed'
-    MR_DER_NEW         = 'MR derived or post-processed (for new data)'
-    SC                 = 'Secondary capture'
-    SC_NEW             = 'Secondary capture (for new data)'
-    SEG                = 'Segmentation objects'
-    SEG_NEW            = 'Segmentation objects (for new data)'
-    GENERIC            = 'Generic'
-    MISSING_IMAGE_TYPE = 'Missing ImageType'
+    NULL                = 'null'
+    CT_LOC              = 'CT localizer'
+    CT_LOC_NEW          = 'CT localizer (for new data)'
+    CT_STD              = 'CT standard'
+    CT_STD_NEW          = 'CT standard (for new data)'
+    MR_LOC              = 'MR localizer'
+    MR_LOC_NEW          = 'MR localizer (for new data)'
+    MR_STD              = 'MR standard'
+    MR_STD_NEW          = 'MR standard (for new data)'
+    PET_STD             = 'PET standard'
+    PET_STD_NEW         = 'PET standard (for new data)'
+    CT_DER              = 'CT derived or post-processed'
+    CT_DER_NEW          = 'CT derived or post-processed (for new data)'
+    MR_DER              = 'MR derived or post-processed'
+    MR_DER_NEW          = 'MR derived or post-processed (for new data)'
+    SC                  = 'Secondary capture'
+    SC_NEW              = 'Secondary capture (for new data)'
+    SEG                 = 'Segmentation objects'
+    SEG_NEW             = 'Segmentation objects (for new data)'
+    NON_IMAGE_DICOM     = 'Non-image DICOM'
+    NON_IMAGE_DICOM_NEW = 'Non-image DICOM (for new data)'
+    OTHER_IMAGE         = 'Other image'
+    OTHER_IMAGE_NEW     = 'Other image (for new data)'
+    GENERIC             = 'Generic'
+    MISSING_IMAGE_TYPE  = 'Missing ImageType'
 
 
 class Profile:
@@ -667,6 +671,68 @@ register_profile(Profile(ProfileName.MR_DER_NEW, 'mr_der_post_v2', [
     PixelSpacingValidator(),
     ImagePositionPatientValidator(),
     ImageOrientationPatientValidator(),
+]))
+
+register_profile(Profile(ProfileName.NON_IMAGE_DICOM, 'non_image_dicom_v1', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    SOPInstanceUIDValidator(),
+], [
+    SeriesDescriptionValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+]))
+
+register_profile(Profile(ProfileName.NON_IMAGE_DICOM_NEW, 'non_image_dicom_v2', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+], [
+    SeriesDescriptionValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+]))
+
+register_profile(Profile(ProfileName.OTHER_IMAGE, 'other_image_v1', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    SOPInstanceUIDValidator(),
+], [
+    SeriesDescriptionValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+]))
+
+register_profile(Profile(ProfileName.OTHER_IMAGE_NEW, 'other_image_v2', [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    SeriesDescriptionValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    ManufacturerValidator(),
+    SoftwareVersionsValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+], [
+    ModelNameValidator(),
+    WindowCenterValidator(),
+    WindowWidthValidator(),
 ]))
 
 register_profile(Profile(ProfileName.GENERIC, None, [

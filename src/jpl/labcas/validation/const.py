@@ -26,3 +26,13 @@ MINIMUM_FILE_SIZE = int(7.5 * 1024)
 # Why are they even called out in the spreadsheet?
 MINIMUM_MR_LOC_ROWS = 96
 MINIMUM_MR_LOC_COLUMNS = 96
+
+# SOP Class UID prefixes for non-image DICOM files; these come right from the "SOP Class UID Routing"
+# tab of the spreadsheet
+NON_IMAGE_SOP_CLASS_UIDS = {
+    '1.2.840.10008.5.1.4.1.1.88.67',
+    '1.2.840.10008.5.1.4.1.1.11.1',
+    '1.2.840.10008.5.1.4.1.1.88.11',
+    '1.2.840.10008.5.1.4.1.1.88.22',
+    '1.2.840.10008.5.1.4.1.1.88.59',
+}
