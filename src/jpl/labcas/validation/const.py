@@ -12,11 +12,6 @@ IGNORED_FILES = {'.DS_Store', 'Thumbs.db', 'desktop.ini', 'DICOMDIR', 'DICOMDIR.
 # Folders whose contents we can skip completely
 IGNORED_FOLDERS = {'thumbnails'}
 
-# Minimum file size to be considered for validation, ~~15 KB~~
-# @hoodriverheather says in a comment in EDRN/jpl.labcas.validation#31 that PET files show up too often
-# as "file too small", so let's reduce it by half to 7.5 KB
-MINIMUM_FILE_SIZE = int(7.5 * 1024)
-
 # Minimum number of rows and columns for MR localizer files
 # See EDRN/jpl.labcas.validation#31 for more details
 #

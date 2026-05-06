@@ -30,7 +30,7 @@ from ._files import PotentialFile
 from ._findings import Finding, ErrorFinding
 from ._profiles import get_profile, ProfileName, PROFILES
 from ._functions import check_directory, iterate_paths
-from .const import PHI_PII_THRESHOLD, MINIMUM_FILE_SIZE, MINIMUM_MR_LOC_ROWS, MINIMUM_MR_LOC_COLUMNS
+from .const import PHI_PII_THRESHOLD, MINIMUM_MR_LOC_ROWS, MINIMUM_MR_LOC_COLUMNS
 from .phi_pii_recognizers import PHI_PII_RECOGNIZERS, DEFAULT_PHI_PII_RECOGNIZER
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count, get_context
@@ -172,30 +172,31 @@ def _scan_one(potential_file: PotentialFile, for_new_data: bool = False) -> int 
             else:
                 _logger.warning('🤷 Skipping file %s because it is not readable as DICOM (excluding from report)', potential_file)
                 findings = []
-        elif potential_file.file_size < MINIMUM_FILE_SIZE:
-            # File size heuristic: only for recognized DICOM files; non-DICOM files are handled above
-            _logger.warning('🤷 Skipping file %s because it is unexpectedly small', potential_file)
-            humanized = humanize.naturalsize(potential_file.file_size)
-            findings = [ErrorFinding(
-                file=potential_file,
-                value=f'FAIL! File is unexpectedly small ({humanized})',
-                score=1.0,
-                error_message=f'Skipping file because it is unexpectedly small; file size is {potential_file.file_size} bytes but require a minimum of {MINIMUM_FILE_SIZE} bytes'
-            )]
-        # See https://github.com/EDRN/jpl.labcas.validation/issues/31#issuecomment-4256524804;
-        # These should not be skipped … not sure why the spreadsheet even calls them out
-        # elif profile_name in (ProfileName.MR_LOC, ProfileName.MR_LOC_NEW) and (potential_file.rows < MINIMUM_MR_LOC_ROWS or potential_file.columns < MINIMUM_MR_LOC_COLUMNS):
-        #     _logger.warning('🖼️ Skipping file %s because it is a small matrix helper file', potential_file)
-        #     findings = []
         else:
-            # Okay, full validation time
-            findings: set[Finding] = set()
-            findings.update(_recognizer.recognize(potential_file))
-
-            # And now to validate the tags against a chosen profile of validators
             profile = get_profile(profile_name)
-            findings.update(profile.validate(potential_file))        
-            findings = list(findings)
+            if potential_file.file_size < profile.minimum_file_size:
+                # File size heuristic: only for recognized DICOM files; non-DICOM files are handled above
+                _logger.warning('🤷 Skipping file %s because it is unexpectedly small', potential_file)
+                humanized = humanize.naturalsize(potential_file.file_size)
+                findings = [ErrorFinding(
+                    file=potential_file,
+                    value=f'FAIL! File is unexpectedly small ({humanized})',
+                    score=1.0,
+                    error_message=f'Skipping file because it is unexpectedly small; file size is {potential_file.file_size} bytes but require a minimum of {profile.minimum_file_size} bytes'
+                )]
+            # See https://github.com/EDRN/jpl.labcas.validation/issues/31#issuecomment-4256524804;
+            # These should not be skipped … not sure why the spreadsheet even calls them out
+            # elif profile_name in (ProfileName.MR_LOC, ProfileName.MR_LOC_NEW) and (potential_file.rows < MINIMUM_MR_LOC_ROWS or potential_file.columns < MINIMUM_MR_LOC_COLUMNS):
+            #     _logger.warning('🖼️ Skipping file %s because it is a small matrix helper file', potential_file)
+            #     findings = []
+            else:
+                # Okay, full validation time
+                findings: set[Finding] = set()
+                findings.update(_recognizer.recognize(potential_file))
+
+                # And now to validate the tags against a chosen profile of validators
+                findings.update(profile.validate(potential_file))
+                findings = list(findings)
 
         if _db_path is None:
             # Single-process mode: return findings directly

@@ -15,7 +15,7 @@ from enum import Enum
 from ._classes import Validator
 from ._files import PotentialFile
 from ._findings import Finding, WarningFinding
-import logging
+import humanize, logging
 
 _logger = logging.getLogger(__name__)
 
@@ -52,10 +52,14 @@ class ProfileName(Enum):
 class Profile:
     '''A "profile" is a set of validators to apply to subsets of DICOM files depending on their contents.'''
 
-    def __init__(self, name: ProfileName, alias: str | None, required_validators: list[Validator], optional_validators: list[Validator]):
+    def __init__(
+        self, name: ProfileName, alias: str | None, minimum_file_size: int,
+        required_validators: list[Validator], optional_validators: list[Validator]
+    ):
         '''Initialize the profile with the given name and validators.'''
         self.name: ProfileName = name
         self.alias = alias if alias else 'N/A'
+        self.minimum_file_size = minimum_file_size
         self.required_validators = required_validators
         self.optional_validators = optional_validators
 
@@ -83,7 +87,8 @@ class Profile:
     
     def __str__(self) -> str:
         rc = f'### `{self.name}`\n\n'
-        rc += f"Alias from Heather's spreadsheet: {self.alias}\n\nRequired validators:\n\n"
+        minimum_file_size = humanize.naturalsize(self.minimum_file_size, binary=True)
+        rc += f"Alias from Heather's spreadsheet: {self.alias}\n\nMinimum file size: {minimum_file_size}\n\nRequired validators:\n\n"
         if not self.required_validators:
             rc += 'None defined\n'
         else:
@@ -115,10 +120,13 @@ def get_profile(profile_name: ProfileName) -> Profile:
 
 PROFILES: dict[ProfileName, Profile] = {}
 
+DEFAULT_MINIMUM_FILE_SIZE = int(7.5 * 1024)
+NO_MINIMUM_FILE_SIZE = 0
+
 from .validators import *  # noqa: F403
-register_profile(Profile(ProfileName.NULL, None, [], []))
+register_profile(Profile(ProfileName.NULL, None, DEFAULT_MINIMUM_FILE_SIZE, [], []))
 
-register_profile(Profile(ProfileName.CT_STD, 'ct_std_v1', [
+register_profile(Profile(ProfileName.CT_STD, 'ct_std_v1', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     ImageTypeValidator(),
@@ -150,7 +158,7 @@ register_profile(Profile(ProfileName.CT_STD, 'ct_std_v1', [
     ContentTimeValidator(),
 ]))
 
-register_profile(Profile(ProfileName.CT_STD_NEW, 'ct_std_v2', [
+register_profile(Profile(ProfileName.CT_STD_NEW, 'ct_std_v2', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     ImageTypeValidator(),
@@ -182,7 +190,7 @@ register_profile(Profile(ProfileName.CT_STD_NEW, 'ct_std_v2', [
 ], [
 ]))
 
-register_profile(Profile(ProfileName.MR_STD, 'mr_std_v1', [
+register_profile(Profile(ProfileName.MR_STD, 'mr_std_v1', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     ImageTypeValidator(),
@@ -214,7 +222,7 @@ register_profile(Profile(ProfileName.MR_STD, 'mr_std_v1', [
     SoftwareVersionsValidator(),
 ]))
 
-register_profile(Profile(ProfileName.MR_STD_NEW, 'mr_std_v2', [
+register_profile(Profile(ProfileName.MR_STD_NEW, 'mr_std_v2', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     ImageTypeValidator(),
@@ -243,7 +251,7 @@ register_profile(Profile(ProfileName.MR_STD_NEW, 'mr_std_v2', [
     ImageOrientationPatientValidator(),
 ], []))
 
-register_profile(Profile(ProfileName.CT_LOC, 'ct_loc_v1', [
+register_profile(Profile(ProfileName.CT_LOC, 'ct_loc_v1', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     ImageTypeValidator(),
@@ -275,7 +283,7 @@ register_profile(Profile(ProfileName.CT_LOC, 'ct_loc_v1', [
     ImageOrientationPatientValidator(),
 ]))
 
-register_profile(Profile(ProfileName.MR_LOC, 'mr_loc_v1', [
+register_profile(Profile(ProfileName.MR_LOC, 'mr_loc_v1', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     ImageTypeValidator(),
@@ -307,7 +315,7 @@ register_profile(Profile(ProfileName.MR_LOC, 'mr_loc_v1', [
     ImageOrientationPatientValidator(),
 ]))
 
-register_profile(Profile(ProfileName.CT_LOC_NEW, 'ct_loc_v2', [
+register_profile(Profile(ProfileName.CT_LOC_NEW, 'ct_loc_v2', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     ImageTypeValidator(),
@@ -342,7 +350,7 @@ register_profile(Profile(ProfileName.CT_LOC_NEW, 'ct_loc_v2', [
 ]))
 
 
-register_profile(Profile(ProfileName.MR_LOC_NEW, 'mr_loc_v2', [
+register_profile(Profile(ProfileName.MR_LOC_NEW, 'mr_loc_v2', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     ImageTypeValidator(),
@@ -374,7 +382,7 @@ register_profile(Profile(ProfileName.MR_LOC_NEW, 'mr_loc_v2', [
     ImageOrientationPatientValidator(),
 ]))
 
-register_profile(Profile(ProfileName.PET_STD, 'pet_std_v1', [
+register_profile(Profile(ProfileName.PET_STD, 'pet_std_v1', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     ImageTypeValidator(),
@@ -406,7 +414,7 @@ register_profile(Profile(ProfileName.PET_STD, 'pet_std_v1', [
     SliceThicknessValidator(),
 ]))
 
-register_profile(Profile(ProfileName.PET_STD_NEW, 'pet_std_v2', [
+register_profile(Profile(ProfileName.PET_STD_NEW, 'pet_std_v2', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     ImageTypeValidator(),
@@ -437,7 +445,7 @@ register_profile(Profile(ProfileName.PET_STD_NEW, 'pet_std_v2', [
     SliceThicknessValidator(),
 ]))
 
-register_profile(Profile(ProfileName.SEG, 'seg_v1', [
+register_profile(Profile(ProfileName.SEG, 'seg_v1', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     FrameOfReferenceUIDValidator(),
@@ -463,7 +471,7 @@ register_profile(Profile(ProfileName.SEG, 'seg_v1', [
     PhotometricInterpretationValidator(),
 ]))
 
-register_profile(Profile(ProfileName.SEG_NEW, 'seg_v2', [
+register_profile(Profile(ProfileName.SEG_NEW, 'seg_v2', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     FrameOfReferenceUIDValidator(),
@@ -489,7 +497,7 @@ register_profile(Profile(ProfileName.SEG_NEW, 'seg_v2', [
     PhotometricInterpretationValidator(),
 ]))
 
-register_profile(Profile(ProfileName.SC, 'sc_v1', [
+register_profile(Profile(ProfileName.SC, 'sc_v1', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     StudyInstanceUIDValidator(),
@@ -516,7 +524,7 @@ register_profile(Profile(ProfileName.SC, 'sc_v1', [
 ]))
 
 
-register_profile(Profile(ProfileName.SC_NEW, 'sc_v2', [
+register_profile(Profile(ProfileName.SC_NEW, 'sc_v2', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     StudyInstanceUIDValidator(),
@@ -543,7 +551,7 @@ register_profile(Profile(ProfileName.SC_NEW, 'sc_v2', [
     ContentTimeValidator(),
 ]))
 
-register_profile(Profile(ProfileName.CT_DER, 'ct_der_post_v1', [
+register_profile(Profile(ProfileName.CT_DER, 'ct_der_post_v1', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     ImageTypeValidator(),
@@ -567,39 +575,6 @@ register_profile(Profile(ProfileName.CT_DER, 'ct_der_post_v1', [
     SoftwareVersionsValidator(),
     AcquisitionTimeValidator(),
     ContentTimeValidator(),
-    WindowCenterValidator(),
-    WindowWidthValidator(),
-    SliceThicknessValidator(),
-    PixelSpacingValidator(),
-    ImagePositionPatientValidator(),
-    ImageOrientationPatientValidator(),
-]))
-
-
-register_profile(Profile(ProfileName.MR_DER, 'mr_der_post_v1', [
-    SOPClassUIDValidator(),
-    ModalityValidator(),
-    ImageTypeValidator(),
-    SeriesDescriptionValidator(),
-    FrameOfReferenceUIDValidator(),
-    StudyInstanceUIDValidator(),
-    SeriesInstanceUIDValidator(),
-    SOPInstanceUIDValidator(),
-    SeriesNumberValidator(),
-    InstanceNumberValidator(),
-    AcquisitionTimeValidator(),
-    ContentTimeValidator(),
-    RowsValidator(),
-    ColumnsValidator(),
-    BitsAllocatedValidator(),
-    BitsStoredValidator(),
-    HighBitValidator(),
-    PixelRepresentationValidator(),
-    PhotometricInterpretationValidator(),
-], [
-    ManufacturerValidator(),
-    ModelNameValidator(),
-    SoftwareVersionsValidator(),
     WindowCenterValidator(),
     WindowWidthValidator(),
     SliceThicknessValidator(),
@@ -609,7 +584,7 @@ register_profile(Profile(ProfileName.MR_DER, 'mr_der_post_v1', [
 ]))
 
 
-register_profile(Profile(ProfileName.CT_DER_NEW, 'ct_der_post_v2', [
+register_profile(Profile(ProfileName.MR_DER, 'mr_der_post_v1', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     ImageTypeValidator(),
@@ -620,9 +595,6 @@ register_profile(Profile(ProfileName.CT_DER_NEW, 'ct_der_post_v2', [
     SOPInstanceUIDValidator(),
     SeriesNumberValidator(),
     InstanceNumberValidator(),
-    ManufacturerValidator(),
-    ModelNameValidator(),
-    SoftwareVersionsValidator(),
     AcquisitionTimeValidator(),
     ContentTimeValidator(),
     RowsValidator(),
@@ -633,6 +605,9 @@ register_profile(Profile(ProfileName.CT_DER_NEW, 'ct_der_post_v2', [
     PixelRepresentationValidator(),
     PhotometricInterpretationValidator(),
 ], [
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
     WindowCenterValidator(),
     WindowWidthValidator(),
     SliceThicknessValidator(),
@@ -641,7 +616,8 @@ register_profile(Profile(ProfileName.CT_DER_NEW, 'ct_der_post_v2', [
     ImageOrientationPatientValidator(),
 ]))
 
-register_profile(Profile(ProfileName.MR_DER_NEW, 'mr_der_post_v2', [
+
+register_profile(Profile(ProfileName.CT_DER_NEW, 'ct_der_post_v2', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     ImageTypeValidator(),
@@ -673,7 +649,39 @@ register_profile(Profile(ProfileName.MR_DER_NEW, 'mr_der_post_v2', [
     ImageOrientationPatientValidator(),
 ]))
 
-register_profile(Profile(ProfileName.NON_IMAGE_DICOM, 'non_image_dicom_v1', [
+register_profile(Profile(ProfileName.MR_DER_NEW, 'mr_der_post_v2', DEFAULT_MINIMUM_FILE_SIZE, [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    ImageTypeValidator(),
+    SeriesDescriptionValidator(),
+    FrameOfReferenceUIDValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+    AcquisitionTimeValidator(),
+    ContentTimeValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+], [
+    WindowCenterValidator(),
+    WindowWidthValidator(),
+    SliceThicknessValidator(),
+    PixelSpacingValidator(),
+    ImagePositionPatientValidator(),
+    ImageOrientationPatientValidator(),
+]))
+
+register_profile(Profile(ProfileName.NON_IMAGE_DICOM, 'non_image_dicom_v1', NO_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     SOPInstanceUIDValidator(),
@@ -683,7 +691,7 @@ register_profile(Profile(ProfileName.NON_IMAGE_DICOM, 'non_image_dicom_v1', [
     SeriesInstanceUIDValidator(),
 ]))
 
-register_profile(Profile(ProfileName.NON_IMAGE_DICOM_NEW, 'non_image_dicom_v2', [
+register_profile(Profile(ProfileName.NON_IMAGE_DICOM_NEW, 'non_image_dicom_v2', NO_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     StudyInstanceUIDValidator(),
@@ -696,7 +704,7 @@ register_profile(Profile(ProfileName.NON_IMAGE_DICOM_NEW, 'non_image_dicom_v2', 
     SoftwareVersionsValidator(),
 ]))
 
-register_profile(Profile(ProfileName.OTHER_IMAGE, 'other_image_v1', [
+register_profile(Profile(ProfileName.OTHER_IMAGE, 'other_image_v1', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     SOPInstanceUIDValidator(),
@@ -713,7 +721,7 @@ register_profile(Profile(ProfileName.OTHER_IMAGE, 'other_image_v1', [
     PhotometricInterpretationValidator(),
 ]))
 
-register_profile(Profile(ProfileName.OTHER_IMAGE_NEW, 'other_image_v2', [
+register_profile(Profile(ProfileName.OTHER_IMAGE_NEW, 'other_image_v2', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     SeriesDescriptionValidator(),
@@ -735,7 +743,7 @@ register_profile(Profile(ProfileName.OTHER_IMAGE_NEW, 'other_image_v2', [
     WindowWidthValidator(),
 ]))
 
-register_profile(Profile(ProfileName.GENERIC, None, [
+register_profile(Profile(ProfileName.GENERIC, None, DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
     StudyInstanceUIDValidator(),
