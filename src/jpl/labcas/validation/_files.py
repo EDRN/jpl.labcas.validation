@@ -143,7 +143,9 @@ class PotentialFile:
     def _determine_profile_name(self, ds: pydicom.Dataset, for_new_data: bool = False):
         from ._profiles import ProfileName
         sop_class_uid = self._safely_extract_value_for_tag(ds, 'SOPClassUID') or ''
-        image_type = set[str]([i.lower() for i in self._safely_extract_value_for_tag(ds, 'ImageType') or []])
+        image_types = self._safely_extract_value_for_tag(ds, 'ImageType') or []
+        if isinstance(image_types, str): image_types = [image_types]
+        image_type = set[str]([i.lower() for i in image_types])
 
         if sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.2'):
             if self._special_image_types.intersection(image_type):

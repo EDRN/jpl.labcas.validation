@@ -495,6 +495,19 @@ class ImageTypeValidator(Validator):
             ))
         return findings
 
+
+class SpecialExceptionFor_MR_ImageTypeValidator(RegexValidator):
+    '''A validator that checks the ImageType tag for localizer images.
+
+    This is a special case in the spreadsheet for the MR profiles where the image type can be
+    the single word "LOCALIZER".
+    '''
+
+    description = 'ImageType for localizer images must be "LOCALIZER"'
+    tag = pydicom.tag.Tag((0x0008, 0x0008))
+    regex = re.compile(r'^LOCALIZER$')
+
+
 # Lesion and Slice Details
 # ------------------------
 
