@@ -193,6 +193,7 @@ register_profile(Profile(ProfileName.CT_STD_NEW, 'ct_std_v2', DEFAULT_MINIMUM_FI
 register_profile(Profile(ProfileName.MR_STD, 'mr_std_v1', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
+    ImageTypeValidator(),
     SeriesDescriptionValidator(),
     FrameOfReferenceUIDValidator(),
     StudyInstanceUIDValidator(),
@@ -216,7 +217,6 @@ register_profile(Profile(ProfileName.MR_STD, 'mr_std_v1', DEFAULT_MINIMUM_FILE_S
     ImagePositionPatientValidator(),
     ImageOrientationPatientValidator(),
 ], [
-    SpecialExceptionFor_MR_ImageTypeValidator(),
     ManufacturerValidator(),
     ModelNameValidator(),
     SoftwareVersionsValidator(),
@@ -225,6 +225,7 @@ register_profile(Profile(ProfileName.MR_STD, 'mr_std_v1', DEFAULT_MINIMUM_FILE_S
 register_profile(Profile(ProfileName.MR_STD_NEW, 'mr_std_v2', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
+    ImageTypeValidator(),
     SeriesDescriptionValidator(),
     FrameOfReferenceUIDValidator(),
     StudyInstanceUIDValidator(),
@@ -248,7 +249,7 @@ register_profile(Profile(ProfileName.MR_STD_NEW, 'mr_std_v2', DEFAULT_MINIMUM_FI
     PixelSpacingValidator(),
     ImagePositionPatientValidator(),
     ImageOrientationPatientValidator(),
-], [SpecialExceptionFor_MR_ImageTypeValidator()]))
+], []))
 
 register_profile(Profile(ProfileName.CT_LOC, 'ct_loc_v1', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
@@ -352,6 +353,7 @@ register_profile(Profile(ProfileName.CT_LOC_NEW, 'ct_loc_v2', DEFAULT_MINIMUM_FI
 register_profile(Profile(ProfileName.MR_LOC_NEW, 'mr_loc_v2', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
+    ImageTypeValidator(),
     SeriesDescriptionValidator(),
     StudyInstanceUIDValidator(),
     SeriesInstanceUIDValidator(),
@@ -364,7 +366,6 @@ register_profile(Profile(ProfileName.MR_LOC_NEW, 'mr_loc_v2', DEFAULT_MINIMUM_FI
     PixelRepresentationValidator(),
     PhotometricInterpretationValidator(),
 ], [
-    SpecialExceptionFor_MR_ImageTypeValidator(),
     FrameOfReferenceUIDValidator(),
     SeriesNumberValidator(),
     InstanceNumberValidator(),
@@ -586,6 +587,7 @@ register_profile(Profile(ProfileName.CT_DER, 'ct_der_post_v1', DEFAULT_MINIMUM_F
 register_profile(Profile(ProfileName.MR_DER, 'mr_der_post_v1', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
+    ImageTypeValidator(),
     SeriesDescriptionValidator(),
     FrameOfReferenceUIDValidator(),
     StudyInstanceUIDValidator(),
@@ -603,7 +605,6 @@ register_profile(Profile(ProfileName.MR_DER, 'mr_der_post_v1', DEFAULT_MINIMUM_F
     PixelRepresentationValidator(),
     PhotometricInterpretationValidator(),
 ], [
-    SpecialExceptionFor_MR_ImageTypeValidator(),
     ManufacturerValidator(),
     ModelNameValidator(),
     SoftwareVersionsValidator(),
@@ -651,6 +652,7 @@ register_profile(Profile(ProfileName.CT_DER_NEW, 'ct_der_post_v2', DEFAULT_MINIM
 register_profile(Profile(ProfileName.MR_DER_NEW, 'mr_der_post_v2', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
     ModalityValidator(),
+    ImageTypeValidator(),
     SeriesDescriptionValidator(),
     FrameOfReferenceUIDValidator(),
     StudyInstanceUIDValidator(),
@@ -671,7 +673,6 @@ register_profile(Profile(ProfileName.MR_DER_NEW, 'mr_der_post_v2', DEFAULT_MINIM
     PixelRepresentationValidator(),
     PhotometricInterpretationValidator(),
 ], [
-    SpecialExceptionFor_MR_ImageTypeValidator(),
     WindowCenterValidator(),
     WindowWidthValidator(),
     SliceThicknessValidator(),

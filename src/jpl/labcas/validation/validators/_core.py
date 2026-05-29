@@ -499,7 +499,7 @@ class ImageTypeValidator(Validator):
 class SpecialExceptionFor_MR_ImageTypeValidator(RegexValidator):
     '''A validator that checks the ImageType tag for localizer images.
 
-    This is a special case in the spreadsheet for the MR profiles where the image type can be
+    This is a special case in the spreadsheet for the `mr_loc_v1` profile only where the image type can be
     the single word "LOCALIZER".
     '''
 
