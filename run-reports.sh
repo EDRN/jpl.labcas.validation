@@ -30,6 +30,9 @@ clean_tmp
 # Create the reports directory
 mkdir --parents reports
 
+# Marker
+date 1>&2
+
 # Let's go: Lung_Team_Project_2 first
 echo "Running Lung_Team_Project_2" 1>&2
 for site in $Lung_Team_Project_2; do
@@ -56,6 +59,7 @@ echo "All done" 1>&2
 
 # Final cleanup
 clean_tmp
+date 1>&2
 
 # All done
 exit 0
