@@ -157,10 +157,13 @@ class PotentialFile:
             else:
                 return ProfileName.CT_STD_NEW if for_new_data else ProfileName.CT_STD
         elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.4'):
+            # Heather's spreadsheet mentions "small matrix helper series" but they're not treated
+            # any differently from other MR images so this conditional clause is sufficient.
+            # (Not to mention: it's confusing that she cataloged it specially!)
             if self._special_image_types.intersection(image_type):
                 return ProfileName.MR_LOC_NEW if for_new_data else ProfileName.MR_LOC
             elif self._derived_image_types.intersection(image_type):
-                return ProfileName.MR_DER
+                return ProfileName.MR_DER_NEW if for_new_data else ProfileName.MR_DER
             elif len(image_type) == 0:
                 return ProfileName.MISSING_IMAGE_TYPE
             else:
@@ -169,11 +172,13 @@ class PotentialFile:
             return ProfileName.PET_STD_NEW if for_new_data else ProfileName.PET_STD
         elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.7'):
             return ProfileName.SC_NEW if for_new_data else ProfileName.SC
+            # Heather's spreadsheet goes onto mention 1.2.840.10008.5.1.4.1.1.7.4 here but the conditional
+            # clause above is sufficient to get to the same place, SC_NEW or SC.
         elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.66.4'):
             return ProfileName.SEG_NEW if for_new_data else ProfileName.SEG
         elif sop_class_uid in NON_IMAGE_SOP_CLASS_UIDS:
             return ProfileName.NON_IMAGE_DICOM_NEW if for_new_data else ProfileName.NON_IMAGE_DICOM
-        elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.88'):
+        elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.1.1'):
             return ProfileName.OTHER_IMAGE_NEW if for_new_data else ProfileName.OTHER_IMAGE
 
         return ProfileName.GENERIC
