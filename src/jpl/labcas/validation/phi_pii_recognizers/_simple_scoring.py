@@ -314,7 +314,8 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         normalized = s_stripped.rstrip('^').strip()
         normalized_lower = normalized.lower()
         if normalized_lower in (
-            'p0helkt8kykj14q7gtgjjl^ry_x+ltzqsqgc9b5hzwso', 'tm8dyx4wixjblqdgi7mx6j^g4admjaegn2ki2rjuqwy8'
+            'p0helkt8kykj14q7gtgjjl^ry_x+ltzqsqgc9b5hzwso', 'tm8dyx4wixjblqdgi7mx6j^g4admjaegn2ki2rjuqwy8',
+            'tqrb0hcizzxdzvi_b7hpdg^03demn_bylhouu6x09b+q'  # EDRN/jpl.labcas.validation#47
         ):
             return True
         
