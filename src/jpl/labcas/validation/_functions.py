@@ -4,8 +4,9 @@
 
 from .errors import DirectoryError
 from .const import IGNORED_FILES, IGNORED_FOLDERS
+from collections import Counter
 from typing import Iterable
-import re, os, pydicom, logging, os.path
+import re, os, pydicom, logging, os.path, math
 
 _logger = logging.getLogger(__name__)
 _event_id_re = re.compile(r'^\d{7}$')
@@ -67,13 +68,63 @@ def check_directory(target: str):
     raise DirectoryError(f'🫙 No valid DICOM files found in {target}')
 
 
+_MIN_ANONYMIZED_TOKEN_LEN = 16
+_ANONYMIZED_TOKEN_EXTRA_CHARS = '_+-'
+
+
+def is_high_entropy_string(
+    s: str, *, min_len: int = 3, min_unique: int = 4, threshold: float = 0.85,
+) -> bool:
+    '''Return True if `s` has high normalized Shannon entropy.'''
+    if not s or len(s) < min_len:
+        return False
+    char_counts = Counter(s)
+    if len(char_counts) < min_unique:
+        return False
+    entropy = 0.0
+    length = len(s)
+    for count in char_counts.values():
+        p = count / length
+        entropy -= p * math.log2(p)
+    max_entropy = math.log2(len(char_counts))
+    if max_entropy == 0:
+        return False
+    return (entropy / max_entropy) > threshold
+
+
+def is_high_entropy_anonymized_token(s: str) -> bool:
+    '''Return True if `s` looks like a pre-anonymized replacement token.
+
+    Pre-anonymized patient identifiers are long, random-looking strings (often
+    base64-like) that may appear as a single value or as DICOM PN components
+    separated by ``^``.  For PN-shaped values, every non-empty component must
+    qualify.
+    '''
+    normalized = s.rstrip('^').strip()
+    if not normalized:
+        return False
+
+    def _part_is_token(part: str) -> bool:
+        if len(part) < _MIN_ANONYMIZED_TOKEN_LEN:
+            return False
+        token_chars = sum(1 for c in part if c.isalnum() or c in _ANONYMIZED_TOKEN_EXTRA_CHARS)
+        if token_chars / len(part) < 0.9:
+            return False
+        return is_high_entropy_string(part, min_len=_MIN_ANONYMIZED_TOKEN_LEN)
+
+    if '^' in normalized:
+        parts = [p.strip() for p in normalized.split('^') if p.strip()]
+        return bool(parts) and all(_part_is_token(p) for p in parts)
+    return _part_is_token(normalized)
+
+
 def is_anonymized_value(s: str) -> bool:
     '''Check if a value should be considered anonymized and skipped.
     
     Returns True if the value:
     - Starts with "anon" (case-insensitive), OR
     - Matches "Doe John", "Doe^John", "John Doe", or "John^Doe" (case-insensitive), OR
-    - Matches the specific anonymized value "P0HeLkT8KYKj14Q7GTGJjL^ry_x+LTzqsQgC9B5hZWso"
+    - Looks like a high-entropy pre-anonymized replacement token
     '''
     if not s:
         return False
@@ -87,11 +138,11 @@ def is_anonymized_value(s: str) -> bool:
     if s_lower.startswith('anon'):
         return True
     
-    # Check for specific anonymized value
     # Also handle trailing carets/spaces
     normalized = s_stripped.rstrip('^').strip()
     normalized_lower = normalized.lower()
-    if normalized_lower == 'p0helkt8kykj14q7gtgjjl^ry_x+ltzqsqgc9b5hzwso':
+
+    if is_high_entropy_anonymized_token(normalized):
         return True
     
     # Check for "Doe John" patterns (case-insensitive)

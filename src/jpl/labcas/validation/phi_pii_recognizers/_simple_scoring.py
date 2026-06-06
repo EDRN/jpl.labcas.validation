@@ -5,12 +5,12 @@
 from .._classes import PHI_PII_Recognizer
 from .._files import PotentialFile
 from .._findings import Finding, HeaderFinding, ImageFinding, ErrorFinding
+from .._functions import is_anonymized_value, is_high_entropy_string
 from ..const import IMAGE_SCORE
-from collections import Counter
 from PIL import Image
 from pydicom import datadict
 from typing import Iterable
-import pydicom, logging, argparse, re, pytesseract, math
+import pydicom, logging, argparse, re, pytesseract
 
 # Avoid problematic DICOM files so we can still grab as many of the tags and values as we can
 pydicom.config.convert_wrong_length_to_UN = True
@@ -289,51 +289,8 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         return s[:self._max_normalized_string] if len(s) > self._max_normalized_string else s
 
     def _is_anonymized_value(self, s: str) -> bool:
-        '''Check if a value should be considered anonymized and skipped.
-        
-        Returns True if the value:
-        - Starts with "anon" (case-insensitive), OR
-        - Matches "Doe John", "Doe^John", "John Doe", or "John^Doe" (case-insensitive), OR
-        - Matches the specific anonymized value "P0HeLkT8KYKj14Q7GTGJjL^ry_x+LTzqsQgC9B5hZWso"
-        - Or this other anonymized value "Tm8dYx4WIXjBLqdGI7MX6J^g4ADmJAEGN2Ki2RJUqwy8"
-        '''
-        if not s:
-            return False
-        s_stripped = s.strip()
-        if not s_stripped:
-            return False
-        
-        s_lower = s_stripped.lower()
-        
-        # Check if starts with "anon"
-        if s_lower.startswith('anon'):
-            return True
-        
-        # Check for specific anonymized value
-        # Also handle trailing carets/spaces
-        normalized = s_stripped.rstrip('^').strip()
-        normalized_lower = normalized.lower()
-        if normalized_lower in (
-            'p0helkt8kykj14q7gtgjjl^ry_x+ltzqsqgc9b5hzwso', 'tm8dyx4wixjblqdgi7mx6j^g4admjaegn2ki2rjuqwy8',
-            'tqrb0hcizzxdzvi_b7hpdg^03demn_bylhouu6x09b+q'  # EDRN/jpl.labcas.validation#47
-        ):
-            return True
-        
-        # Check for "Doe John" patterns (case-insensitive)
-        # Match: "Doe John", "Doe^John", "John Doe", "John^Doe"
-        # Also handle trailing carets/spaces and multiple carets
-        
-        # Check exact matches for common patterns
-        if normalized_lower in ('doe john', 'john doe', 'doe^john', 'john^doe'):
-            return True
-        
-        # Check if it matches the pattern with optional spaces/carets
-        # Pattern: (Doe|John) followed by (space or ^) followed by (John|Doe)
-        doe_john_pattern = re.compile(r'^(doe|john)[\s\^]+(john|doe)', re.IGNORECASE)
-        if doe_john_pattern.match(normalized):
-            return True
-        
-        return False
+        '''Check if a value should be considered anonymized and skipped.'''
+        return is_anonymized_value(s)
 
     def _is_pn_with_none(self, s: str) -> bool:
         '''Check if a DICOM Person Name (PN) value contains "NONE" as any component.
@@ -401,25 +358,7 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         Uses Shannon entropy to detect random-looking strings (IDs, tokens, etc.)
         that are likely not human-readable names.
         '''
-        if not s or len(s) < 3: return False
-        
-        # Calculate Shannon entropy
-        char_counts = Counter(s)
-        
-        entropy = 0.0
-        length = len(s)
-        for count in char_counts.values():
-            p = count / length
-            entropy -= p * math.log2(p)
-        
-        # Normalize by maximum possible entropy (log2 of unique chars)
-        max_entropy = math.log2(len(char_counts))
-        if max_entropy == 0: return False
-        
-        normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0
-        
-        # High entropy threshold: > 0.85 and at least 4 unique characters
-        return normalized_entropy > 0.85 and len(char_counts) >= 4
+        return is_high_entropy_string(s)
 
 
     def _score(self, tag: pydicom.tag.Tag, vr: str | None, value: any, matched_key: str | None) -> float:
