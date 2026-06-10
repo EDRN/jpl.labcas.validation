@@ -512,8 +512,6 @@ register_profile(Profile(ProfileName.SC, 'sc_v1', DEFAULT_MINIMUM_FILE_SIZE, [
     HighBitValidator(),
     PixelRepresentationValidator(),
     PhotometricInterpretationValidator(),
-    WindowCenterValidator(),
-    WindowWidthValidator(),
 ], [
     ImageTypeValidator(),
     SeriesDescriptionValidator(),
@@ -523,6 +521,8 @@ register_profile(Profile(ProfileName.SC, 'sc_v1', DEFAULT_MINIMUM_FILE_SIZE, [
     ManufacturerValidator(),
     ModelNameValidator(),
     SoftwareVersionsValidator(),
+    WindowCenterValidator(),
+    WindowWidthValidator(),
 ]))
 
 
@@ -538,8 +538,6 @@ register_profile(Profile(ProfileName.SC_NEW, 'sc_v2', DEFAULT_MINIMUM_FILE_SIZE,
     HighBitValidator(),
     PixelRepresentationValidator(),
     PhotometricInterpretationValidator(),
-    WindowCenterValidator(),
-    WindowWidthValidator(),
 ], [
     ImageTypeValidator(),
     SeriesDescriptionValidator(),
@@ -551,6 +549,8 @@ register_profile(Profile(ProfileName.SC_NEW, 'sc_v2', DEFAULT_MINIMUM_FILE_SIZE,
     SoftwareVersionsValidator(),
     AcquisitionTimeValidator(),
     ContentTimeValidator(),
+    WindowCenterValidator(),
+    WindowWidthValidator(),
 ]))
 
 register_profile(Profile(ProfileName.CT_DER, 'ct_der_post_v1', DEFAULT_MINIMUM_FILE_SIZE, [
