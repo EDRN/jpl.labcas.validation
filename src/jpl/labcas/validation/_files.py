@@ -143,6 +143,7 @@ class PotentialFile:
     def _determine_profile_name(self, ds: pydicom.Dataset, for_new_data: bool = False):
         from ._profiles import ProfileName
         sop_class_uid = self._safely_extract_value_for_tag(ds, 'SOPClassUID') or ''
+        sop_class_uid = sop_class_uid.rstrip('\x00 \t\r\n')  # Remove trailing null bytes, etc. for #48
         image_types = self._safely_extract_value_for_tag(ds, 'ImageType') or []
         if isinstance(image_types, str): image_types = [image_types]
         image_type = set[str]([i.lower() for i in image_types])
