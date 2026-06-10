@@ -344,23 +344,30 @@ def validate_single(
     return results
 
 
-def _create_non_solr_paths_iterator(directory: str):
+def _create_non_solr_paths_iterator(directory: str, site_id: str | None = None):
     '''Create a function that iterates over the paths in the given directory.'''
     _logger.info('🔍 Creating non-Solr paths iterator for %s', directory)
+    if site_id:
+        _logger.info('🔍 Using overridden site ID %s', site_id)
 
     def _iterate() -> Iterable[PotentialFile]:
         for path in iterate_paths(directory):
-            yield PotentialFile(path)
+            yield PotentialFile(path, site_id=site_id)
     return _iterate
 
 
-def _create_solr_paths_iterator(solr_url: str, scan_directory: str, collection_directory: str, batch_size: int = 100):
+def _create_solr_paths_iterator(
+    solr_url: str, scan_directory: str, collection_directory: str, batch_size: int = 100,
+    site_id_override: str | None = None,
+):
     '''Create a function that iterates over paths in scan_directory using the given Solr URL.
 
     `collection_directory` is used to derive LabCAS file IDs so IDs still start at the collection
     folder even when `scan_directory` targets a specific site subset.
     '''
     _logger.info('🔍 Creating Solr paths iterator for %s with batch size %d', scan_directory, batch_size)
+    if site_id_override:
+        _logger.info('🔍 Using overridden site ID %s', site_id_override)
 
     def _collect_existing_paths(solr: pysolr.Solr, ids_to_paths: dict[str, str]) -> set[PotentialFile]:
         if not ids_to_paths:
@@ -371,11 +378,17 @@ def _create_solr_paths_iterator(solr_url: str, scan_directory: str, collection_d
         results = solr.search(query, sort='id asc', rows=len(ids_to_paths), fl=['id', 'eventID', 'BlindedSiteID'])
         existing_paths: set[PotentialFile] = set()
         for doc in results.docs:
-            doc_id, event_id, site_id = doc.get('id'), doc.get('eventID', ['«unknown event»'])[0], doc.get('BlindedSiteID', ['«unknown site»'])[0]
+            doc_id = doc.get('id')
+            event_id = doc.get('eventID', ['«unknown event»'])[0]
+            doc_site_id = doc.get('BlindedSiteID', ['«unknown site»'])[0]
             if isinstance(doc_id, list):
                 doc_id = doc_id[0] if doc_id else None
             if doc_id and doc_id in ids_to_paths:
-                existing_paths.add(PotentialFile(ids_to_paths[doc_id], site_id=site_id, event_id=event_id))
+                existing_paths.add(PotentialFile(
+                    ids_to_paths[doc_id],
+                    site_id=site_id_override or doc_site_id,
+                    event_id=event_id,
+                ))
         return existing_paths
 
     collection_name = os.path.basename(collection_directory)
@@ -449,6 +462,10 @@ def main():
         '--subset',
         help='Optional site subdirectory under directory to scan (example: Images_Site_uDUsCV9ikmtw)',
     )
+    parser.add_argument(
+        '--site-id',
+        help='Override the blinded site ID (defaults to the value inferred from filesystem paths or Solr)',
+    )
     parser.add_argument('directory', nargs='?', help='Directory to scan for DICOM files')
     args = parser.parse_args()
     _configure_logging(args.loglevel, args.log_file)
@@ -472,17 +489,24 @@ def main():
             sys.exit(1)
         scan_directory = os.path.join(collection_directory, subset)
 
+    site_id_override = args.site_id.strip() if args.site_id else None
+    if args.site_id is not None and not site_id_override:
+        _logger.error('💥 --site-id cannot be empty')
+        sys.exit(1)
+
     if args.url:
         solr_url = args.url.strip()
         solr_url = solr_url if solr_url.endswith('/') else solr_url + '/'
         if 'files' not in solr_url:
             solr_url += 'files/'
         _logger.info('🔍 Solr URL is %s', solr_url)
-        file_generator = _create_solr_paths_iterator(solr_url, scan_directory, collection_directory)
+        file_generator = _create_solr_paths_iterator(
+            solr_url, scan_directory, collection_directory, site_id_override=site_id_override,
+        )
     else:
         _logger.info('🔍 Not using Solr (no URL provided)')
         solr_url = None
-        file_generator = _create_non_solr_paths_iterator(scan_directory)
+        file_generator = _create_non_solr_paths_iterator(scan_directory, site_id=site_id_override)
 
     db_path = None
     check_directory(scan_directory)
