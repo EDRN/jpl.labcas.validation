@@ -44,6 +44,7 @@ __doc__ = '🛂 EDRN DICOM Validation: check for PHI/PII and compliance with EDR
 __copyright__ = 'Copyright © 2025–2026 California Institute of Technology'
 __license__ = 'Apache 2.0'
 _recognizer = None  # The one recognizer we'll need for all workers for all files
+_skip_dicom_validation = False  # When True, skip profile tag validation in _scan_one
 _logger = logging.getLogger(__name__)
 _db_path = None  # Path to SQLite database for storing findings
 _db_lock = None  # Lock for database access (thread lock in single-process; shared process lock in multi-process)
@@ -112,11 +113,12 @@ def _init_worker(
         db_path: Optional path to SQLite database (None for single-process mode)
         db_write_lock: Optional shared lock for serializing DB writes across processes (required when db_path is set)
     '''
-    global _recognizer, _db_path, _db_lock
+    global _recognizer, _skip_dicom_validation, _db_path, _db_lock
     # Configure logging for this worker process to match the parent process
     console_level = logging.ERROR if quiet_console else None
     _configure_logging(recognizer_args.get('loglevel', logging.INFO), recognizer_args.get('log_file'), console_level)
     _recognizer = PHI_PII_RECOGNIZERS[recognizer_name](argparse.Namespace(**recognizer_args))
+    _skip_dicom_validation = recognizer_args.get('skip_dicom_validation', False)
     _db_path = db_path
     _db_lock = db_write_lock if db_path else None  # Shared cross-process lock when using database
 
@@ -194,8 +196,8 @@ def _scan_one(potential_file: PotentialFile, for_new_data: bool = False) -> int 
                 findings: set[Finding] = set()
                 findings.update(_recognizer.recognize(potential_file))
 
-                # And now to validate the tags against a chosen profile of validators
-                findings.update(profile.validate(potential_file))
+                if not _skip_dicom_validation:
+                    findings.update(profile.validate(potential_file))
                 findings = list(findings)
 
         if _db_path is None:
@@ -426,6 +428,10 @@ def main():
     )
     parser.add_argument(
         '-n', '--new-data', action='store_true', help='Scan for new data (subject to stricter checks; default False)'
+    )
+    parser.add_argument(
+        '--skip-dicom-validation', action='store_true',
+        help='Skip profile-based DICOM tag validation (PHI/PII detection still runs unless --recognizer accepting)'
     )
     parser.add_argument(
         '--list-profiles',
