@@ -37,8 +37,54 @@ class PotentialFile:
         if site_id: self.site_id = site_id
         if event_id: self.event_id = event_id
 
+        # Cached DICOM header metadata (populated on first header read during scan)
+        self.sop_class_uid: str = ''
+        self.study_instance_uid: str = ''
+        self.series_instance_uid: str = ''
+        self.report_profile_name: str = ''
+        self._header_loaded: bool = False
+        self._dicom_readable: bool | None = None
+
         # Produce on demand; keyed by for_new_data (standard vs new-data profile names differ)
         self._profile_names: dict[bool, object] = {}
+
+    @staticmethod
+    def _scalar_tag_value(ds: pydicom.Dataset, tag_name: str, extract) -> str:
+        '''Return a single string value for a DICOM tag, or empty string.'''
+        value = extract(ds, tag_name) or ''
+        if isinstance(value, list):
+            value = value[0] if value else ''
+        return str(value).strip('\x00').strip()
+
+    def _load_header_metadata(self, for_new_data: bool = False) -> None:
+        '''Read DICOM header once and cache profile name and UIDs for scan and reporting.'''
+        if self._header_loaded and for_new_data in self._profile_names:
+            return
+        from ._profiles import ProfileName
+        try:
+            ds = self.dcmread(stop_before_pixels=True, force=False)
+            if not self._header_loaded:
+                self.sop_class_uid = self._scalar_tag_value(ds, 'SOPClassUID', self._safely_extract_value_for_tag)
+                self.study_instance_uid = self._scalar_tag_value(ds, 'StudyInstanceUID', self._safely_extract_value_for_tag)
+                self.series_instance_uid = self._scalar_tag_value(ds, 'SeriesInstanceUID', self._safely_extract_value_for_tag)
+                self._header_loaded = True
+                self._dicom_readable = True
+            if for_new_data not in self._profile_names:
+                self._profile_names[for_new_data] = self._determine_profile_name(ds, for_new_data)
+            del ds
+        except Exception as ex:
+            self._dicom_readable = False
+            if for_new_data not in self._profile_names:
+                _logger.error(
+                    '💥 Unexpected exception reading %s to determine its profile, falling back to generic: %s',
+                    self.path, ex
+                )
+                self._profile_names[for_new_data] = ProfileName.GENERIC
+
+    def _update_report_profile_name(self, for_new_data: bool = False) -> None:
+        '''Store the profile name string used for CSV reports.'''
+        profile = self._profile_names.get(for_new_data)
+        self.report_profile_name = profile.value if profile else 'Unknown'
 
     @lru_cache
     def _read_dicom_file(self, stop_before_pixels: bool = False, force: bool = False) -> pydicom.Dataset:
@@ -185,26 +231,19 @@ class PotentialFile:
         return ProfileName.GENERIC
 
     def profile_name(self, for_new_data: bool = False):
-        from ._profiles import ProfileName
-        if for_new_data not in self._profile_names:
-            try:
-                ds = self.dcmread(stop_before_pixels=True, force=False)
-                self._profile_names[for_new_data] = self._determine_profile_name(ds, for_new_data)
-                del ds
-            except Exception as ex:
-                _logger.error(
-                    '💥 Unexpected exception reading %s to determine its profile, falling back to generic: %s',
-                    self.path, ex
-                )
-                self._profile_names[for_new_data] = ProfileName.GENERIC
+        self._load_header_metadata(for_new_data)
         return self._profile_names[for_new_data]
 
     def is_readable_dicom(self) -> bool:
         '''Return True when the file can be parsed as DICOM metadata.'''
+        if self._dicom_readable is not None:
+            return self._dicom_readable
         try:
             self.dcmread(stop_before_pixels=True, force=False)
+            self._dicom_readable = True
             return True
         except Exception:
+            self._dicom_readable = False
             return False
 
     def __repr__(self) -> str:
