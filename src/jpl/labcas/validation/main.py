@@ -132,13 +132,21 @@ def _write_finding_to_db(conn: sqlite3.Connection, finding: Finding):
         tag_str = f'{tag_obj.group},{tag_obj.element}'
     
     conn.execute('''
-        INSERT INTO findings (file_path, site_id, event_id, file_name, finding_type, value, score, tag, description, pattern, index_val)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO findings (
+            file_path, site_id, event_id, file_name, profile_name, sop_class_uid,
+            study_instance_uid, series_instance_uid,
+            finding_type, value, score, tag, description, pattern, index_val
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         finding.file.path,
         finding.file.site_id,
         finding.file.event_id,
         finding.file.file_name,
+        finding.file.report_profile_name,
+        finding.file.sop_class_uid,
+        finding.file.study_instance_uid,
+        finding.file.series_instance_uid,
         finding_type,
         finding.value,
         finding.score,
@@ -158,6 +166,7 @@ def _scan_one(potential_file: PotentialFile, for_new_data: bool = False) -> int 
     '''
     try:
         profile_name = potential_file.profile_name(for_new_data)
+        potential_file._update_report_profile_name(for_new_data)
         if profile_name is None or profile_name in (ProfileName.GENERIC, ProfileName.NULL, ProfileName.MISSING_IMAGE_TYPE):
             # For files we can parse as DICOM, report unrecognized profile (e.g., garbled SOPClassUID).
             # For non-DICOM or unreadable files, continue to skip and keep reports DICOM-focused.
@@ -239,6 +248,10 @@ def _create_findings_db(db_path: str):
                 site_id TEXT NOT NULL,
                 event_id TEXT NOT NULL,
                 file_name TEXT NOT NULL,
+                profile_name TEXT,
+                sop_class_uid TEXT,
+                study_instance_uid TEXT,
+                series_instance_uid TEXT,
                 finding_type TEXT NOT NULL,
                 value TEXT NOT NULL,
                 score REAL NOT NULL,

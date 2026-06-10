@@ -170,7 +170,10 @@ class Report:
         Otherwise, uses the findings list.
         '''
         _logger.info('📝 Generating CSV reports')
-        _header = ['Site ID', 'Event ID', 'File Name', 'Profile', 'Score', 'Findings', 'Details']
+        _header = [
+            'Site ID', 'Event ID', 'File Name', 'Study Instance UID', 'Series Instance UID',
+            'Profile', 'Score', 'Findings', 'Details',
+        ]
 
         if self.db_path:
             # Query database directly for memory efficiency
@@ -192,19 +195,29 @@ class Report:
                     _logger.info('Processing site ID %s', site_id)
                     # Get all findings for this site (all events), grouped by file (include Warning/Error regardless of score)
                     cursor = conn.execute('''
-                        SELECT event_id, file_path, file_name, finding_type, value, score, tag, description, pattern, index_val
+                        SELECT event_id, file_path, file_name, profile_name, study_instance_uid,
+                               series_instance_uid, finding_type, value, score, tag, description,
+                               pattern, index_val
                         FROM findings
                         WHERE site_id = ? AND (finding_type IN ('WarningFinding', 'ErrorFinding') OR score >= ?)
                         ORDER BY event_id, file_path, finding_type, score DESC
                     ''', (site_id, self.score))
                     
                     # Group by event_id, file_path, and finding_type
-                    event_file_findings: defaultdict[str, defaultdict[str, defaultdict[str, list]]] = defaultdict(
-                        lambda: defaultdict(lambda: defaultdict(list))
+                    event_file_findings: defaultdict[str, defaultdict[str, dict]] = defaultdict(
+                        lambda: defaultdict(dict)
                     )
                     for row in cursor:
-                        event_id, file_path, file_name, finding_type, value, score, tag, description, pattern, index_val = row
-                        event_file_findings[event_id][file_path][finding_type].append({
+                        (event_id, file_path, file_name, profile_name, study_uid, series_uid,
+                         finding_type, value, score, tag, description, pattern, index_val) = row
+                        file_entry = event_file_findings[event_id][file_path]
+                        if 'findings_by_type' not in file_entry:
+                            file_entry['file_name'] = file_name
+                            file_entry['profile_name'] = profile_name or 'Unknown'
+                            file_entry['study_instance_uid'] = study_uid or ''
+                            file_entry['series_instance_uid'] = series_uid or ''
+                            file_entry['findings_by_type'] = defaultdict(list)
+                        file_entry['findings_by_type'][finding_type].append({
                             'value': value,
                             'score': score,
                             'tag': tag,
@@ -223,16 +236,12 @@ class Report:
                         # Process all events for this site
                         for event_id in sorted(event_file_findings.keys()):
                             file_findings = event_file_findings[event_id]
-                            for file_path, finding_types in sorted(file_findings.items()):
-                                file_name = os.path.basename(file_path)
-                                # Get profile name for this file
-                                from ._files import PotentialFile
-                                potential_file = PotentialFile(file_path)
-                                profile_name = potential_file.profile_name(for_new_data)
-                                if profile_name is not None:
-                                    profile_name = profile_name.value
-                                else:
-                                    profile_name = 'Unknown'
+                            for file_path, file_entry in sorted(file_findings.items()):
+                                file_name = file_entry['file_name']
+                                profile_name = file_entry['profile_name']
+                                study_uid = file_entry['study_instance_uid']
+                                series_uid = file_entry['series_instance_uid']
+                                finding_types = file_entry['findings_by_type']
                                 kinds = sorted(finding_types.keys())
                                 
                                 for kind_type in kinds:
@@ -251,13 +260,15 @@ class Report:
                                         details = ", ".join(report_parts)
                                         
                                         writer.writerow([
-                                            site_id, 
-                                            event_id, 
+                                            site_id,
+                                            event_id,
                                             file_name,
+                                            study_uid,
+                                            series_uid,
                                             profile_name,
-                                            finding_data['score'], 
+                                            finding_data['score'],
                                             kind,
-                                            details
+                                            details,
                                         ])
             finally:
                 _logger.info('Closing database connection')
@@ -288,11 +299,16 @@ class Report:
                                     key=lambda x: x.score, reverse=True
                                 )
                                 if len(scored_findings) > 0:
-                                    # Get profile name from the first finding (all findings for same file have same profile)
-                                    profile_name = scored_findings[0].file.profile_name(for_new_data).value if scored_findings[0].file.profile_name(for_new_data) else 'Unknown'
+                                    potential_file = scored_findings[0].file
+                                    profile_name = potential_file.report_profile_name or 'Unknown'
+                                    study_uid = potential_file.study_instance_uid
+                                    series_uid = potential_file.series_instance_uid
                                     for finding in scored_findings:
                                         score, details = finding.score, ", ".join(finding.report())
-                                        writer.writerow([site_id, event_id, file_name, profile_name, score, kind, details])
+                                        writer.writerow([
+                                            site_id, event_id, file_name, study_uid, series_uid,
+                                            profile_name, score, kind, details,
+                                        ])
         _logger.info('Finished generating CSV reports')
 
     def _organize_report(self) -> dict:
