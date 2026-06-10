@@ -77,6 +77,8 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         re.compile(r'^RECPHYS\d+$', re.IGNORECASE),  # e.g., "RECPHYS554793"
         re.compile(r'^OPERATOR\d+$', re.IGNORECASE),  # e.g., "OPERATOR554793"
         re.compile(r'^PATIENT\d+$', re.IGNORECASE),  # e.g., "PATIENT39180"
+        # Site-prefixed de-identified pseudonyms (e.g., "BCM_0001", "UPMC_0001")
+        re.compile(r'^[A-Z]{2,}[_-][0-9]+$', re.IGNORECASE),
         # DICOM Person Name (PN) format with NONE as a component (e.g., "NAME^NONE", "SOMETHING^NONE^OTHER")
         re.compile(r'^[A-Z0-9]+\^NONE(\^|$)', re.IGNORECASE),  # Matches PN values where any component is "NONE"
         re.compile(r'\^NONE(\^|$)', re.IGNORECASE),  # Matches any PN component that is "NONE"
