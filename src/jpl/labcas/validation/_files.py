@@ -203,6 +203,11 @@ class PotentialFile:
                 return ProfileName.MISSING_IMAGE_TYPE
             else:
                 return ProfileName.CT_STD_NEW if for_new_data else ProfileName.CT_STD
+        elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.481.3'):
+            # This must appear before MR_* routing because RTSTRUCT files have an SOPClassUID
+            # that starts with 1.2.840.10008.5.1.4.1.1.481.3, which would also be detected as
+            # starting with 1.2.840.10008.5.1.4.1.1.4.
+            return ProfileName.RTSTRUCT_NEW if for_new_data else ProfileName.RTSTRUCT
         elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.4'):
             # Heather's spreadsheet mentions "small matrix helper series" but they're not treated
             # any differently from other MR images so this conditional clause is sufficient.

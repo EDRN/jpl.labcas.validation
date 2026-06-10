@@ -43,6 +43,8 @@ class ProfileName(Enum):
     SEG_NEW             = 'Segmentation objects (for new data)'
     NON_IMAGE_DICOM     = 'Non-image DICOM'
     NON_IMAGE_DICOM_NEW = 'Non-image DICOM (for new data)'
+    RTSTRUCT            = 'RT Struct'
+    RTSTRUCT_NEW        = 'RT Struct (for new data)'
     OTHER_IMAGE         = 'Other image'
     OTHER_IMAGE_NEW     = 'Other image (for new data)'
     GENERIC             = 'Generic'
@@ -757,3 +759,35 @@ register_profile(Profile(ProfileName.GENERIC, None, DEFAULT_MINIMUM_FILE_SIZE, [
     PixelRepresentationValidator(),
     PhotometricInterpretationValidator(),
 ], []))
+
+register_profile(Profile(ProfileName.RTSTRUCT, 'rtstruct_v1', 0, [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    FrameOfReferenceUIDValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+], [
+    SeriesDescriptionValidator(),
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+]))
+
+register_profile(Profile(ProfileName.RTSTRUCT_NEW, 'rtstruct_v2', 0, [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    SeriesDescriptionValidator(),
+    FrameOfReferenceUIDValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+], [
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+]))
