@@ -3,7 +3,7 @@
 This is the [DICOM](https://www.dicomstandard.org) validation tool for the [Laboratory Catalog and Archive Service](https://edrn-labcas.jpl.nasa.gov/) (LabCAS). It ensures that DICOM files:
 
 - **Contain little-to-no PHI/PII** — Scans both DICOM headers and pixel data for protected health information (PHI) and personally identifiable information (PII)
-- **Adhere to EDRN requirements** — Validates DICOM tags against the [EDRN core validation spreadsheet](https://docs.google.com/spreadsheets/d/1oQB0EoeajxFagSrIzF_8hOIc6hbC9MiMvhbYLfr6vPQ/edit?pli=1&gid=1779958583#gid=1779958583)
+- **Adhere to EDRN requirements** — Validates DICOM tags against the [EDRN core validation spreadsheet](https://docs.google.com/spreadsheets/d/1MPSEOMTVnT-eVL8AXLXVebuBOqNDSxrz_cqAV1az_N4/edit?gid=1392488545#gid=1392488545)
 
 This tool was originally developed in response to [EDRN/EDRN-metadata#160](https://github.com/EDRN/EDRN-metadata/issues/160).
 

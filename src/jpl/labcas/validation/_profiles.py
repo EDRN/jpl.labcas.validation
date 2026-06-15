@@ -8,7 +8,7 @@ actually defines the validators themselves.
 
 See:
 
-https://docs.google.com/spreadsheets/d/1oQB0EoeajxFagSrIzF_8hOIc6hbC9MiMvhbYLfr6vPQ/edit?pli=1&gid=1779958583#gid=1779958583
+https://docs.google.com/spreadsheets/d/1MPSEOMTVnT-eVL8AXLXVebuBOqNDSxrz_cqAV1az_N4/edit?gid=1392488545#gid=1392488545
 '''
 
 from enum import Enum
