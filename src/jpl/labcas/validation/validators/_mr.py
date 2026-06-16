@@ -3,9 +3,12 @@
 '''🛂 EDRN DICOM Validation: MR validators.'''
 
 from ._base import RegexValidator, DICOMUIDValidator
+from .._classes import Validator
 from .._files import PotentialFile
 from .._findings import ValidationFinding
 from .._functions import modality
+from pydicom.dataelem import convert_raw_data_element
+from collections.abc import Sequence
 import pydicom, re, os, logging
 
 _logger = logging.getLogger(__name__)
@@ -18,7 +21,6 @@ class SpacingBetweenSlicesValidator(RegexValidator):
     tag = pydicom.tag.Tag((0x0018, 0x0088))
     regex = re.compile(r'^([1-9]\d*(\.\d+)?|0\.\d+)?$')
     series_instance_uids: set[str] = set()
-
 
     def _has_multiple_slices_in_series(self, ds: pydicom.Dataset) -> bool:
         '''Check if there are multiple slices in the same series.
@@ -89,22 +91,53 @@ class SpacingBetweenSlicesValidator(RegexValidator):
         return findings
 
 
-class AcquisitionMatrixValidator(RegexValidator):
+class AcquisitionMatrixValidator(Validator):
     '''A validator that checks the AcquisitionMatrix tag.'''
 
-    description = 'AcquisitionMatrix must be four non-negative integers'
-    tag = pydicom.tag.Tag((0x0018, 0x0080))
-    regex = re.compile(r'^\[(\d+,\s*){3}\d+\]$')
+    description = 'AcquisitionMatrix, if present, must contain four non-negative integers'
+    tag = pydicom.tag.Tag((0x0018, 0x1310))
 
     def validate(self, potential_file: PotentialFile) -> set[ValidationFinding]:
-        '''Validate the given DICOM dataset and return a list of findings.'''
+        '''Validate AcquisitionMatrix when the tag is present.'''
         findings: set[ValidationFinding] = set()
-        if modality(ds) != 'MR': return findings
+        ds = potential_file.dcmread(stop_before_pixels=True, force=False)
+        elem = ds.get_item(self.tag)
+        if elem is None:
+            return findings
 
-        # Only bother to validate AcquisitionMatrix if tag (0018, 1310) exists and has a value
-        elem = ds.get_item((0x0018, 0x1310))
-        if elem is not None and elem.value:
-            findings.update(super().validate(potential_file))
+        elem = convert_raw_data_element(elem)
+        value = elem.value
+        if value is None:
+            findings.add(ValidationFinding(
+                file=potential_file, value='value missing', tag=self.tag,
+                description='AcquisitionMatrix tag found but has no value',
+            ))
+            return findings
+
+        values_iter = [value] if (isinstance(value, str) or not isinstance(value, Sequence)) else list(value)
+        if len(values_iter) != 4:
+            findings.add(ValidationFinding(
+                file=potential_file, value=value, tag=self.tag,
+                description=f'AcquisitionMatrix must be exactly four values (got {len(values_iter)})',
+            ))
+            return findings
+
+        for i, v in enumerate(values_iter):
+            try:
+                n = int(v)
+            except (ValueError, TypeError):
+                findings.add(ValidationFinding(
+                    file=potential_file, value=value, tag=self.tag,
+                    description=f'AcquisitionMatrix value {i + 1} must be a non-negative integer',
+                ))
+                return findings
+            if n < 0:
+                findings.add(ValidationFinding(
+                    file=potential_file, value=value, tag=self.tag,
+                    description=f'AcquisitionMatrix value {i + 1} must be non-negative (got {n})',
+                ))
+                return findings
+
         return findings
 
 
@@ -120,3 +153,12 @@ class MisterImageTypeValidator(RegexValidator):
     # regex = re.compile(r'^LOCALIZER$', re.IGNORECASE)
     # New pattern: any string up to 128 characters long
     regex = re.compile(r'^.{1,128}$')
+
+
+class DiffusionBValueValidator(RegexValidator):
+    '''A validator that checks the DiffusionBValue tag for presence only.'''
+
+    description = 'DiffusionBValue must be present'
+    tag = pydicom.tag.Tag((0x0018, 0x9087))
+    regex = re.compile(r'.+')
+

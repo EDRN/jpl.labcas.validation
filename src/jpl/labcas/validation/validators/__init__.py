@@ -41,7 +41,40 @@ from ._core import (  # noqa: F401
     WindowWidthValidator,
 
 )
-from ._mr import SpacingBetweenSlicesValidator, AcquisitionMatrixValidator, MisterImageTypeValidator  # noqa: F401
+from ._mr import (  # noqa: F401
+    SpacingBetweenSlicesValidator, AcquisitionMatrixValidator, MisterImageTypeValidator,
+    DiffusionBValueValidator,
+)
+
+from ._ct import (  # noqa: F401
+    ExposureTimeValidator,
+    XRayTubeCurrentValidator,
+    ExposureValidator,
+    CTDIvolValidator,
+    CTDIPhantomTypeCodeSequenceValidator,
+    RescaleSlopeValidator,
+    RescaleInterceptValidator,
+)
+
+from ._pet import (  # noqa: F401
+    PatientWeightValidator,
+    RadiopharmaceuticalInformationSequenceValidator,
+    RadionuclideCodeSequenceValidator,
+    RadionuclideTotalDoseValidator,
+    RadionuclideHalfLifeValidator,
+    RadiopharmaceuticalStartTimeDateTimeValidator,
+    DecayCorrectionValidator,
+)
+
+from ._rtstruct import (  # noqa: F401
+    StructureSetLabelValidator,
+    StructureSetNameValidator,
+    StructureSetDescriptionValidator,
+    ReferencedFrameOfReferenceSequenceValidator,
+    StructureSetROISequenceValidator,
+    ROIContourSequenceValidator,
+    RTROIObservationsSequenceValidator,
+)
 
 __all__ = [
     'ExperimentalModalityValidator', 'ExperimentalManufacturerValidator', 'ExperimentalWarningValidator',
@@ -78,5 +111,17 @@ __all__ = [
     'StudyInstanceUIDValidator',
     'WindowCenterValidator',
     'WindowWidthValidator',
-    'SpacingBetweenSlicesValidator', 'AcquisitionMatrixValidator'
+    # @hoodriverheather's so-called 'MR Extensions':
+    'SpacingBetweenSlicesValidator', 'AcquisitionMatrixValidator', 'DiffusionBValueValidator',
+    # @hoodriverheather's 'CT Extensions':
+    'ExposureTimeValidator', 'XRayTubeCurrentValidator', 'ExposureValidator', 'CTDIvolValidator',
+    'CTDIPhantomTypeCodeSequenceValidator', 'RescaleSlopeValidator', 'RescaleInterceptValidator',
+    # @hoodriverheather's 'PET Extensions':
+    'PatientWeightValidator', 'RadiopharmaceuticalInformationSequenceValidator',
+    'RadionuclideCodeSequenceValidator', 'RadionuclideTotalDoseValidator', 'RadionuclideHalfLifeValidator',
+    'RadiopharmaceuticalStartTimeDateTimeValidator', 'DecayCorrectionValidator',
+    # RT Struct extensions:
+    'StructureSetLabelValidator', 'StructureSetNameValidator', 'StructureSetDescriptionValidator',
+    'ReferencedFrameOfReferenceSequenceValidator', 'StructureSetROISequenceValidator',
+    'ROIContourSequenceValidator', 'RTROIObservationsSequenceValidator',
 ]

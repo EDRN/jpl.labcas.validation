@@ -71,7 +71,11 @@ class Profile:
         for validator in self.required_validators:
             findings.update(validator.validate(potential_file))
         for validator in self.optional_validators:
-            optional_findings = validator.validate(potential_file)
+            try:
+                optional_findings = validator.validate(potential_file)
+            except Exception as ex:
+                _logger.error('🤷 Error validating optional validator %s: %s', validator, ex)
+                breakpoint()
             for finding in optional_findings:
                 if finding.kind() != '👮 Warning':
                     # Convert to WarningFinding by copying attributes
@@ -151,6 +155,9 @@ register_profile(Profile(ProfileName.CT_STD, 'ct_std_v1', DEFAULT_MINIMUM_FILE_S
     PixelRepresentationValidator(),
     ImagePositionPatientValidator(),
     ImageOrientationPatientValidator(),
+    CTDIvolValidator(),
+    RescaleInterceptValidator(),
+    RescaleSlopeValidator(),
 ], [
     SeriesDescriptionValidator(),
     ManufacturerValidator(),
@@ -158,6 +165,10 @@ register_profile(Profile(ProfileName.CT_STD, 'ct_std_v1', DEFAULT_MINIMUM_FILE_S
     SoftwareVersionsValidator(),
     AcquisitionTimeValidator(),
     ContentTimeValidator(),
+    ExposureValidator(),
+    CTDIPhantomTypeCodeSequenceValidator(),
+    ExposureTimeValidator(),
+    XRayTubeCurrentValidator(),
 ]))
 
 register_profile(Profile(ProfileName.CT_STD_NEW, 'ct_std_v2', DEFAULT_MINIMUM_FILE_SIZE, [
@@ -189,7 +200,14 @@ register_profile(Profile(ProfileName.CT_STD_NEW, 'ct_std_v2', DEFAULT_MINIMUM_FI
     PixelSpacingValidator(),
     ImagePositionPatientValidator(),
     ImageOrientationPatientValidator(),
+    CTDIvolValidator(),
+    RescaleInterceptValidator(),
+    RescaleSlopeValidator(),
 ], [
+    ExposureValidator(),
+    CTDIPhantomTypeCodeSequenceValidator(),
+    ExposureTimeValidator(),
+    XRayTubeCurrentValidator(),
 ]))
 
 register_profile(Profile(ProfileName.MR_STD, 'mr_std_v1', DEFAULT_MINIMUM_FILE_SIZE, [
@@ -218,10 +236,13 @@ register_profile(Profile(ProfileName.MR_STD, 'mr_std_v1', DEFAULT_MINIMUM_FILE_S
     PixelSpacingValidator(),
     ImagePositionPatientValidator(),
     ImageOrientationPatientValidator(),
+    SpacingBetweenSlicesValidator(),
+    AcquisitionMatrixValidator(),
 ], [
     ManufacturerValidator(),
     ModelNameValidator(),
     SoftwareVersionsValidator(),
+    DiffusionBValueValidator(),
 ]))
 
 register_profile(Profile(ProfileName.MR_STD_NEW, 'mr_std_v2', DEFAULT_MINIMUM_FILE_SIZE, [
@@ -251,7 +272,11 @@ register_profile(Profile(ProfileName.MR_STD_NEW, 'mr_std_v2', DEFAULT_MINIMUM_FI
     PixelSpacingValidator(),
     ImagePositionPatientValidator(),
     ImageOrientationPatientValidator(),
-], []))
+    SpacingBetweenSlicesValidator(),
+    AcquisitionMatrixValidator(),
+], [
+    DiffusionBValueValidator(),
+]))
 
 register_profile(Profile(ProfileName.CT_LOC, 'ct_loc_v1', DEFAULT_MINIMUM_FILE_SIZE, [
     SOPClassUIDValidator(),
@@ -267,6 +292,8 @@ register_profile(Profile(ProfileName.CT_LOC, 'ct_loc_v1', DEFAULT_MINIMUM_FILE_S
     HighBitValidator(),
     PixelRepresentationValidator(),
     PhotometricInterpretationValidator(),
+    RescaleInterceptValidator(),
+    RescaleSlopeValidator()
 ], [
     SeriesDescriptionValidator(),
     FrameOfReferenceUIDValidator(),
@@ -283,6 +310,11 @@ register_profile(Profile(ProfileName.CT_LOC, 'ct_loc_v1', DEFAULT_MINIMUM_FILE_S
     PixelSpacingValidator(),
     ImagePositionPatientValidator(),
     ImageOrientationPatientValidator(),
+    ExposureValidator(),
+    CTDIvolValidator(),
+    CTDIPhantomTypeCodeSequenceValidator(),
+    ExposureTimeValidator(),
+    XRayTubeCurrentValidator(),
 ]))
 
 register_profile(Profile(ProfileName.MR_LOC, 'mr_loc_v1', DEFAULT_MINIMUM_FILE_SIZE, [
@@ -315,6 +347,8 @@ register_profile(Profile(ProfileName.MR_LOC, 'mr_loc_v1', DEFAULT_MINIMUM_FILE_S
     PixelSpacingValidator(),
     ImagePositionPatientValidator(),
     ImageOrientationPatientValidator(),
+    SpacingBetweenSlicesValidator(),
+    AcquisitionMatrixValidator(),
 ]))
 
 register_profile(Profile(ProfileName.CT_LOC_NEW, 'ct_loc_v2', DEFAULT_MINIMUM_FILE_SIZE, [
@@ -332,6 +366,8 @@ register_profile(Profile(ProfileName.CT_LOC_NEW, 'ct_loc_v2', DEFAULT_MINIMUM_FI
     HighBitValidator(),
     PixelRepresentationValidator(),
     PhotometricInterpretationValidator(),
+    RescaleInterceptValidator(),
+    RescaleSlopeValidator(),
 ], [
     FrameOfReferenceUIDValidator(),
     SeriesNumberValidator(),
@@ -349,6 +385,11 @@ register_profile(Profile(ProfileName.CT_LOC_NEW, 'ct_loc_v2', DEFAULT_MINIMUM_FI
     PixelSpacingValidator(),
     ImagePositionPatientValidator(),
     ImageOrientationPatientValidator(),
+    ExposureValidator(),
+    CTDIvolValidator(),
+    CTDIPhantomTypeCodeSequenceValidator(),
+    ExposureTimeValidator(),
+    XRayTubeCurrentValidator(),
 ]))
 
 
@@ -382,6 +423,8 @@ register_profile(Profile(ProfileName.MR_LOC_NEW, 'mr_loc_v2', DEFAULT_MINIMUM_FI
     PixelSpacingValidator(),
     ImagePositionPatientValidator(),
     ImageOrientationPatientValidator(),
+    SpacingBetweenSlicesValidator(),
+    AcquisitionMatrixValidator(),
 ]))
 
 register_profile(Profile(ProfileName.PET_STD, 'pet_std_v1', DEFAULT_MINIMUM_FILE_SIZE, [
@@ -404,6 +447,13 @@ register_profile(Profile(ProfileName.PET_STD, 'pet_std_v1', DEFAULT_MINIMUM_FILE
     PixelSpacingValidator(),
     ImagePositionPatientValidator(),
     ImageOrientationPatientValidator(),
+    PatientWeightValidator(),
+    RadiopharmaceuticalInformationSequenceValidator(),
+    RadionuclideCodeSequenceValidator(),
+    RadionuclideTotalDoseValidator(),
+    RadionuclideHalfLifeValidator(),
+    RadiopharmaceuticalStartTimeDateTimeValidator(),
+    DecayCorrectionValidator(),
 ], [
     SeriesDescriptionValidator(),
     ManufacturerValidator(),
@@ -441,6 +491,13 @@ register_profile(Profile(ProfileName.PET_STD_NEW, 'pet_std_v2', DEFAULT_MINIMUM_
     PixelSpacingValidator(),
     ImagePositionPatientValidator(),
     ImageOrientationPatientValidator(),
+    PatientWeightValidator(),
+    RadiopharmaceuticalInformationSequenceValidator(),
+    RadionuclideCodeSequenceValidator(),
+    RadionuclideTotalDoseValidator(),
+    RadionuclideHalfLifeValidator(),
+    RadiopharmaceuticalStartTimeDateTimeValidator(),
+    DecayCorrectionValidator(),
 ], [
     WindowCenterValidator(),
     WindowWidthValidator(),
@@ -583,6 +640,8 @@ register_profile(Profile(ProfileName.CT_DER, 'ct_der_post_v1', DEFAULT_MINIMUM_F
     PixelSpacingValidator(),
     ImagePositionPatientValidator(),
     ImageOrientationPatientValidator(),
+    RescaleInterceptValidator(),
+    RescaleSlopeValidator(),
 ]))
 
 
@@ -616,6 +675,7 @@ register_profile(Profile(ProfileName.MR_DER, 'mr_der_post_v1', DEFAULT_MINIMUM_F
     PixelSpacingValidator(),
     ImagePositionPatientValidator(),
     ImageOrientationPatientValidator(),
+    DiffusionBValueValidator(),
 ]))
 
 
@@ -649,6 +709,8 @@ register_profile(Profile(ProfileName.CT_DER_NEW, 'ct_der_post_v2', DEFAULT_MINIM
     PixelSpacingValidator(),
     ImagePositionPatientValidator(),
     ImageOrientationPatientValidator(),
+    RescaleInterceptValidator(),
+    RescaleSlopeValidator(),
 ]))
 
 register_profile(Profile(ProfileName.MR_DER_NEW, 'mr_der_post_v2', DEFAULT_MINIMUM_FILE_SIZE, [
@@ -681,6 +743,7 @@ register_profile(Profile(ProfileName.MR_DER_NEW, 'mr_der_post_v2', DEFAULT_MINIM
     PixelSpacingValidator(),
     ImagePositionPatientValidator(),
     ImageOrientationPatientValidator(),
+    DiffusionBValueValidator(),
 ]))
 
 register_profile(Profile(ProfileName.NON_IMAGE_DICOM, 'non_image_dicom_v1', NO_MINIMUM_FILE_SIZE, [
@@ -767,6 +830,10 @@ register_profile(Profile(ProfileName.RTSTRUCT, 'rtstruct_v1', 0, [
     StudyInstanceUIDValidator(),
     SeriesInstanceUIDValidator(),
     SOPInstanceUIDValidator(),
+    StructureSetLabelValidator(),
+    ReferencedFrameOfReferenceSequenceValidator(),
+    StructureSetROISequenceValidator(),
+    ROIContourSequenceValidator(),
 ], [
     SeriesDescriptionValidator(),
     SeriesNumberValidator(),
@@ -774,6 +841,9 @@ register_profile(Profile(ProfileName.RTSTRUCT, 'rtstruct_v1', 0, [
     ManufacturerValidator(),
     ModelNameValidator(),
     SoftwareVersionsValidator(),
+    StructureSetNameValidator(),
+    StructureSetDescriptionValidator(),
+    RTROIObservationsSequenceValidator(),
 ]))
 
 register_profile(Profile(ProfileName.RTSTRUCT_NEW, 'rtstruct_v2', 0, [
@@ -787,7 +857,14 @@ register_profile(Profile(ProfileName.RTSTRUCT_NEW, 'rtstruct_v2', 0, [
     ManufacturerValidator(),
     ModelNameValidator(),
     SoftwareVersionsValidator(),
+    StructureSetLabelValidator(),
+    ReferencedFrameOfReferenceSequenceValidator(),
+    StructureSetROISequenceValidator(),
+    ROIContourSequenceValidator(),
 ], [
     SeriesNumberValidator(),
     InstanceNumberValidator(),
+    StructureSetNameValidator(),
+    StructureSetDescriptionValidator(),
+    RTROIObservationsSequenceValidator(),
 ]))
