@@ -171,7 +171,7 @@ class Report:
         '''
         _logger.info('📝 Generating CSV reports')
         _header = [
-            'Site ID', 'Event ID', 'File Name', 'Study Instance UID', 'Series Instance UID',
+            'Site ID', 'Event ID', 'File Path', 'Study Instance UID', 'Series Instance UID',
             'Profile', 'Score', 'Findings', 'Details',
         ]
 
@@ -212,7 +212,6 @@ class Report:
                          finding_type, value, score, tag, description, pattern, index_val) = row
                         file_entry = event_file_findings[event_id][file_path]
                         if 'findings_by_type' not in file_entry:
-                            file_entry['file_name'] = file_name
                             file_entry['profile_name'] = profile_name or 'Unknown'
                             file_entry['study_instance_uid'] = study_uid or ''
                             file_entry['series_instance_uid'] = series_uid or ''
@@ -237,7 +236,6 @@ class Report:
                         for event_id in sorted(event_file_findings.keys()):
                             file_findings = event_file_findings[event_id]
                             for file_path, file_entry in sorted(file_findings.items()):
-                                file_name = file_entry['file_name']
                                 profile_name = file_entry['profile_name']
                                 study_uid = file_entry['study_instance_uid']
                                 series_uid = file_entry['series_instance_uid']
@@ -262,7 +260,7 @@ class Report:
                                         writer.writerow([
                                             site_id,
                                             event_id,
-                                            file_name,
+                                            file_path,
                                             study_uid,
                                             series_uid,
                                             profile_name,
