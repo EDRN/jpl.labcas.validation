@@ -500,6 +500,7 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
 
             # Initialize tag_keyword for this iteration
             tag_keyword = datadict.keyword_for_tag(t) or ''
+            allow_name_like_here = (tag_keyword in self._name_like_allowed_tags) or (vr == 'PN')
 
             # Skip institution names if we're suppressing them
             if self._suppress_institution_names and (t.group, t.element) == (0x0008, 0x0080): continue
@@ -527,6 +528,9 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
                         # as DICOM person names are legitimate names and may have high entropy
                         continue
                     elif c:
+                        # Structured PN detection below reports the same value with higher confidence.
+                        if allow_name_like_here and self._pn_structured.match(c):
+                            continue
                         score = self._score(t, vr, c, None)
                         finding = HeaderFinding(
                             file=potential_file, value=self._displayable_str(c), score=score, tag=t,
@@ -544,9 +548,6 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
             else:
                 tag_keyword = elem_keyword or tag_keyword or ''
             vendor_context = tag_keyword in self._vendor_safe_tags
-
-            # Allow name-like patterns where the keyword says it's a name or when value-representation
-            # (VR) is explicitly person name (PN)
             allow_name_like_here = (tag_keyword in self._name_like_allowed_tags) or (vr == 'PN')
 
             for c in candidates:
