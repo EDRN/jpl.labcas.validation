@@ -37,6 +37,7 @@ Issues = 'https://github.com/EDRN/jpl.labcas.validation/issues'
 [project.scripts]
 validate-dicom-files = 'jpl.labcas.validation.main:main'
 summarize-validation-reports = 'jpl.labcas.validation.summary:main'
+spot-check-pet-tags = 'jpl.labcas.validation.pet_spot_check:main'
 
 
 [tool.hatch.version]
