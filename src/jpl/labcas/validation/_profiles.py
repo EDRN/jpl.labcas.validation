@@ -449,10 +449,6 @@ register_profile(Profile(ProfileName.PET_STD, 'pet_std_v1', DEFAULT_MINIMUM_FILE
     ImageOrientationPatientValidator(),
     PatientWeightValidator(),
     RadiopharmaceuticalInformationSequenceValidator(),
-    RadionuclideCodeSequenceValidator(),
-    RadionuclideTotalDoseValidator(),
-    RadionuclideHalfLifeValidator(),
-    RadiopharmaceuticalStartTimeDateTimeValidator(),
     DecayCorrectionValidator(),
 ], [
     SeriesDescriptionValidator(),
@@ -493,10 +489,6 @@ register_profile(Profile(ProfileName.PET_STD_NEW, 'pet_std_v2', DEFAULT_MINIMUM_
     ImageOrientationPatientValidator(),
     PatientWeightValidator(),
     RadiopharmaceuticalInformationSequenceValidator(),
-    RadionuclideCodeSequenceValidator(),
-    RadionuclideTotalDoseValidator(),
-    RadionuclideHalfLifeValidator(),
-    RadiopharmaceuticalStartTimeDateTimeValidator(),
     DecayCorrectionValidator(),
 ], [
     WindowCenterValidator(),

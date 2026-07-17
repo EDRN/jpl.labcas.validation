@@ -59,10 +59,6 @@ from ._ct import (  # noqa: F401
 from ._pet import (  # noqa: F401
     PatientWeightValidator,
     RadiopharmaceuticalInformationSequenceValidator,
-    RadionuclideCodeSequenceValidator,
-    RadionuclideTotalDoseValidator,
-    RadionuclideHalfLifeValidator,
-    RadiopharmaceuticalStartTimeDateTimeValidator,
     DecayCorrectionValidator,
 )
 
@@ -118,8 +114,7 @@ __all__ = [
     'CTDIPhantomTypeCodeSequenceValidator', 'RescaleSlopeValidator', 'RescaleInterceptValidator',
     # @hoodriverheather's 'PET Extensions':
     'PatientWeightValidator', 'RadiopharmaceuticalInformationSequenceValidator',
-    'RadionuclideCodeSequenceValidator', 'RadionuclideTotalDoseValidator', 'RadionuclideHalfLifeValidator',
-    'RadiopharmaceuticalStartTimeDateTimeValidator', 'DecayCorrectionValidator',
+    'DecayCorrectionValidator',
     # RT Struct extensions:
     'StructureSetLabelValidator', 'StructureSetNameValidator', 'StructureSetDescriptionValidator',
     'ReferencedFrameOfReferenceSequenceValidator', 'StructureSetROISequenceValidator',
