@@ -226,6 +226,9 @@ class PotentialFile:
             return ProfileName.SC_NEW if for_new_data else ProfileName.SC
             # Heather's spreadsheet goes onto mention 1.2.840.10008.5.1.4.1.1.7.4 here but the conditional
             # clause above is sufficient to get to the same place, SC_NEW or SC.
+        # The test for 1.2.840.10008.5.1.4.1.1.66.4 must come before the test for NON_IMAGE_SOP_CLASS_UIDS
+        # since 1.2.840.10008.5.1.4.1.1.66 is in NON_IMAGE_SOP_CLASS_UIDS and is a substring of
+        # 1.2.840.10008.5.1.4.1.1.66.4.
         elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.66.4'):
             return ProfileName.SEG_NEW if for_new_data else ProfileName.SEG
         elif sop_class_uid in NON_IMAGE_SOP_CLASS_UIDS:
