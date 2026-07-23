@@ -34,7 +34,12 @@ def _get_sequence(ds: pydicom.Dataset, tag: pydicom.tag.Tag) -> DICOMSequence | 
     if not isinstance(elem, DataElement):
         elem = convert_raw_data_element(elem)
     value = elem.value
-    return value if isinstance(value, DICOMSequence) else None
+    if isinstance(value, DICOMSequence):
+        return value
+    # Empty SQ elements can decode to a plain list instead of a Sequence.
+    if isinstance(value, list):
+        return DICOMSequence(value)
+    return None
 
 
 def _non_empty_text(value) -> str | None:
@@ -94,7 +99,7 @@ class RadiopharmaceuticalInformationSequenceValidator(Validator):
             return findings
         if len(sequence) < 1:
             findings.add(ValidationFinding(
-                file=potential_file, value=len(sequence), tag=self.tag,
+                file=potential_file, value='empty sequence', tag=self.tag,
                 description=(
                     'RadiopharmaceuticalInformationSequence must contain at least one Item '
                     'describing the administered radiopharmaceutical'
