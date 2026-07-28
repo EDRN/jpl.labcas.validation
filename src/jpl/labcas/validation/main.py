@@ -36,8 +36,10 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count, get_context
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
+from pydicom import datadict
+from pydicom.tag import Tag, BaseTag
 from typing import Iterable
-import argparse, sys, logging, os, pydicom, pysolr, os.path, tempfile, sqlite3, threading, traceback, humanize, warnings
+import argparse, sys, logging, os, pydicom, pysolr, os.path, re, tempfile, sqlite3, threading, traceback, humanize, warnings
 
 
 __doc__ = '🛂 EDRN DICOM Validation: check for PHI/PII and compliance with EDRN core and MR requirements for DICOM tags'
@@ -100,6 +102,28 @@ def _score_type(value: str) -> float:
         return score
     except ValueError:
         raise argparse.ArgumentTypeError(f'{value} is not a valid floating point number')
+
+
+_tag_spec_re = re.compile(r'^\(?\s*(?:0[xX])?([0-9a-fA-F]{1,4})\s*,\s*(?:0[xX])?([0-9a-fA-F]{1,4})\s*\)?$')
+
+
+def _tag_spec_type(value: str) -> BaseTag:
+    '''Parse a DICOM tag specifier into a `Tag`.
+
+    The specifier may be a tag keyword (e.g. ``PatientID``) or a ``(group,element)`` hex ID such as
+    ``0010,0020`` or ``(0010,0020)``.
+    '''
+    stripped = value.strip()
+    match = _tag_spec_re.match(stripped)
+    if match:
+        group, element = int(match.group(1), 16), int(match.group(2), 16)
+        return Tag(group, element)
+    tag = datadict.tag_for_keyword(stripped)
+    if tag is None:
+        raise argparse.ArgumentTypeError(
+            f'{value!r} is not a recognized DICOM tag keyword or a (group,element) hex ID such as 0010,0020'
+        )
+    return Tag(tag)
 
 
 def _init_worker(
@@ -346,7 +370,7 @@ def validate_single(
     return results
 
 
-def _create_non_solr_paths_iterator(directory: str, site_id: str | None = None):
+def _create_non_solr_paths_iterator(directory: str, site_id: str | None = None, event_id_tag: BaseTag | None = None):
     '''Create a function that iterates over the paths in the given directory.'''
     _logger.info('🔍 Creating non-Solr paths iterator for %s', directory)
     if site_id:
@@ -354,13 +378,13 @@ def _create_non_solr_paths_iterator(directory: str, site_id: str | None = None):
 
     def _iterate() -> Iterable[PotentialFile]:
         for path in iterate_paths(directory):
-            yield PotentialFile(path, site_id=site_id)
+            yield PotentialFile(path, site_id=site_id, event_id_tag=event_id_tag)
     return _iterate
 
 
 def _create_solr_paths_iterator(
     solr_url: str, scan_directory: str, collection_directory: str, batch_size: int = 100,
-    site_id_override: str | None = None,
+    site_id_override: str | None = None, event_id_tag: BaseTag | None = None,
 ):
     '''Create a function that iterates over paths in scan_directory using the given Solr URL.
 
@@ -390,6 +414,7 @@ def _create_solr_paths_iterator(
                     ids_to_paths[doc_id],
                     site_id=site_id_override or doc_site_id,
                     event_id=event_id,
+                    event_id_tag=event_id_tag,
                 ))
         return existing_paths
 
@@ -472,6 +497,15 @@ def main():
         '--site-id',
         help='Override the blinded site ID (defaults to the value inferred from filesystem paths or Solr)',
     )
+    parser.add_argument(
+        '--replace-event-id-column', type=_tag_spec_type, metavar='TAG',
+        help=(
+            'Replace the Event ID column with the value of a DICOM tag instead of the event ID '
+            'inferred from the file path (or from Solr); TAG may be a keyword such as PatientID or a '
+            '(group,element) hex ID such as 0010,0020 or (0010,0020). Useful for collections that lack '
+            'event IDs, or to override the event ID—for example, with patient IDs—in collections that do'
+        ),
+    )
     parser.add_argument('directory', nargs='?', help='Directory to scan for DICOM files')
     args = parser.parse_args()
     _configure_logging(args.loglevel, args.log_file)
@@ -508,11 +542,14 @@ def main():
         _logger.info('🔍 Solr URL is %s', solr_url)
         file_generator = _create_solr_paths_iterator(
             solr_url, scan_directory, collection_directory, site_id_override=site_id_override,
+            event_id_tag=args.replace_event_id_column,
         )
     else:
         _logger.info('🔍 Not using Solr (no URL provided)')
         solr_url = None
-        file_generator = _create_non_solr_paths_iterator(scan_directory, site_id=site_id_override)
+        file_generator = _create_non_solr_paths_iterator(
+            scan_directory, site_id=site_id_override, event_id_tag=args.replace_event_id_column,
+        )
 
     db_path = None
     check_directory(scan_directory)

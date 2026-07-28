@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 import pydicom, re, os.path, logging
 from pydicom import datadict
+from pydicom.tag import Tag, BaseTag
 from .const import NON_IMAGE_SOP_CLASS_UIDS
 
 _logger = logging.getLogger(__name__)
@@ -23,8 +24,13 @@ class PotentialFile:
     # Regex for parsing organization parts from file paths
     _organization_re = re.compile(r'([^/]+)/(\d{7})/(.+)$')  # blah/blah/Images_site_XYX/1234567/f1/f2/…/file.dcm
 
-    def __init__(self, path: str, site_id: str = None, event_id: str = None):
-        '''Initialize the potential file with the given file path and optional site and event IDs.'''
+    def __init__(self, path: str, site_id: str = None, event_id: str = None, event_id_tag: BaseTag | None = None):
+        '''Initialize the potential file with the given file path and optional site and event IDs.
+
+        If `event_id_tag` is given, the Event ID column will instead be populated (once the DICOM
+        header is read) with the value of that DICOM tag, taking precedence over both the path-derived
+        and any explicitly given `event_id`.
+        '''
         self.path = path
         self.file_size = os.path.getsize(path)
 
@@ -36,6 +42,7 @@ class PotentialFile:
 
         if site_id: self.site_id = site_id
         if event_id: self.event_id = event_id
+        self._event_id_tag = event_id_tag
 
         # Cached DICOM header metadata (populated on first header read during scan)
         self.sop_class_uid: str = ''
@@ -67,6 +74,9 @@ class PotentialFile:
                 self.sop_class_uid = self._scalar_tag_value(ds, 'SOPClassUID', self._safely_extract_value_for_tag)
                 self.study_instance_uid = self._scalar_tag_value(ds, 'StudyInstanceUID', self._safely_extract_value_for_tag)
                 self.series_instance_uid = self._scalar_tag_value(ds, 'SeriesInstanceUID', self._safely_extract_value_for_tag)
+                if self._event_id_tag is not None:
+                    replacement = self._scalar_tag_value(ds, self._event_id_tag, self._safely_extract_value_for_tag)
+                    self.event_id = replacement if replacement else '«unknown event»'
                 self._header_loaded = True
                 self._dicom_readable = True
             if for_new_data not in self._profile_names:
@@ -99,9 +109,12 @@ class PotentialFile:
         else:
             return pydicom.dcmread(self.path, stop_before_pixels=stop_before_pixels, force=force)
 
-    def _safely_extract_value_for_tag(self, ds: pydicom.Dataset, tag_name: str) -> str | list[str] | None:
+    def _safely_extract_value_for_tag(self, ds: pydicom.Dataset, tag_name: str | BaseTag) -> str | list[str] | None:
         '''Safely extract a value for a DICOM tag.
-        
+
+        `tag_name` may be a keyword (e.g., ``'SOPClassUID'``) or a `pydicom.tag.BaseTag` instance
+        (e.g., when a caller has already resolved a ``(group, element)`` tag ID).
+
         Returns:
             - str: For single-value tags (e.g., SOPClassUID)
             - list[str]: For multi-value tags (e.g., ImageType with backslash-separated values or sequences)
@@ -109,7 +122,7 @@ class PotentialFile:
         '''
         try:
             # Convert tag name to tag number for more reliable access
-            tag = datadict.tag_for_keyword(tag_name)
+            tag = tag_name if isinstance(tag_name, BaseTag) else datadict.tag_for_keyword(tag_name)
             if tag is None:
                 # Fallback to getattr if keyword lookup fails
                 tag_value = getattr(ds, tag_name, None)
