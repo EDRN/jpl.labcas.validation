@@ -126,6 +126,12 @@ def _tag_spec_type(value: str) -> BaseTag:
     return Tag(tag)
 
 
+def _tag_display_name(tag: BaseTag) -> str:
+    '''Return a human-friendly display name for a DICOM tag, for use as a CSV column header.'''
+    keyword = datadict.keyword_for_tag(tag)
+    return keyword if keyword else str(tag)
+
+
 def _init_worker(
     recognizer_name: str, recognizer_args: dict, db_path: str = None, db_write_lock=None, quiet_console: bool = False
 ):
@@ -534,6 +540,10 @@ def main():
         _logger.error('💥 --site-id cannot be empty')
         sys.exit(1)
 
+    event_id_column_name = (
+        _tag_display_name(args.replace_event_id_column) if args.replace_event_id_column else 'Event ID'
+    )
+
     if args.url:
         solr_url = args.url.strip()
         solr_url = solr_url if solr_url.endswith('/') else solr_url + '/'
@@ -561,13 +571,13 @@ def main():
             if args.concurrency == 1:
                 findings = validate_single(args.recognizer, args, file_generator, args.new_data)
                 _logger.info('🔍 Found %d findings', len(findings))
-                report = Report(findings=findings, score=args.score)
+                report = Report(findings=findings, score=args.score, event_id_column_name=event_id_column_name)
             else:
                 db_path, total_findings = validate_pool(
                     args.recognizer, args, args.concurrency, file_generator, args.new_data
                 )
                 _logger.info('🔍 Found %d findings', total_findings)
-                report = Report(db_path=db_path, score=args.score)
+                report = Report(db_path=db_path, score=args.score, event_id_column_name=event_id_column_name)
                 _logger.debug('🔍 Wrote database in: %s', db_path)
         report.generate_report(output_directory, for_new_data=args.new_data)
     finally:

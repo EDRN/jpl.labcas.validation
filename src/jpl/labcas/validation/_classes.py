@@ -88,7 +88,10 @@ class Report:
     Can work with either a list of findings (for backward compatibility) or a SQLite database path
     (for memory-efficient processing).
     '''
-    def __init__(self, findings: Optional[list[Finding]] = None, score: float = 1.0, db_path: Optional[str] = None):
+    def __init__(
+        self, findings: Optional[list[Finding]] = None, score: float = 1.0, db_path: Optional[str] = None,
+        event_id_column_name: str = 'Event ID',
+    ):
         '''Initialize the report with the given findings or database path.
         
         Don't report findings unless they are equal to or exceed the score.
@@ -97,6 +100,8 @@ class Report:
             findings: Optional list of Finding objects (for backward compatibility)
             score: Minimum score threshold for reporting findings
             db_path: Optional path to SQLite database containing findings (preferred for memory efficiency)
+            event_id_column_name: Header label for the Event ID column (may be overridden to reflect a
+                DICOM tag name when the caller replaced the event ID with a tag's value)
         '''
         if db_path and findings:
             raise ValueError('Cannot specify both findings list and database path')
@@ -106,6 +111,7 @@ class Report:
         self.findings = findings
         self.db_path = db_path
         self.score = score
+        self.event_id_column_name = event_id_column_name
 
     def _get_finding_kind(self, finding_type: str) -> str:
         '''Get the kind string for a finding type.'''
@@ -171,7 +177,7 @@ class Report:
         '''
         _logger.info('📝 Generating CSV reports')
         _header = [
-            'Site ID', 'Event ID', 'File Path', 'Study Instance UID', 'Series Instance UID',
+            'Site ID', self.event_id_column_name, 'File Path', 'Study Instance UID', 'Series Instance UID',
             'Profile', 'Score', 'Findings', 'Details',
         ]
 
