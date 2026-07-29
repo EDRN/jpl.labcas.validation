@@ -207,7 +207,8 @@ class PotentialFile:
         if isinstance(image_types, str): image_types = [image_types]
         image_type = set[str]([i.lower() for i in image_types])
 
-        if sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.2'):
+        # Heather wants exact matches on SOPClassUIDs, not prefixes.
+        if sop_class_uid == '1.2.840.10008.5.1.4.1.1.2':
             if self._special_image_types.intersection(image_type):
                 return ProfileName.CT_LOC_NEW if for_new_data else ProfileName.CT_LOC
             elif self._derived_image_types.intersection(image_type):
@@ -216,12 +217,12 @@ class PotentialFile:
                 return ProfileName.MISSING_IMAGE_TYPE
             else:
                 return ProfileName.CT_STD_NEW if for_new_data else ProfileName.CT_STD
-        elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.481.3'):
+        elif sop_class_uid == '1.2.840.10008.5.1.4.1.1.481.3':
             # This must appear before MR_* routing because RTSTRUCT files have an SOPClassUID
             # that starts with 1.2.840.10008.5.1.4.1.1.481.3, which would also be detected as
             # starting with 1.2.840.10008.5.1.4.1.1.4.
             return ProfileName.RTSTRUCT_NEW if for_new_data else ProfileName.RTSTRUCT
-        elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.4'):
+        elif sop_class_uid == '1.2.840.10008.5.1.4.1.1.4':
             # Heather's spreadsheet mentions "small matrix helper series" but they're not treated
             # any differently from other MR images so this conditional clause is sufficient.
             # (Not to mention: it's confusing that she cataloged it specially!)
@@ -233,20 +234,15 @@ class PotentialFile:
                 return ProfileName.MISSING_IMAGE_TYPE
             else:
                 return ProfileName.MR_STD_NEW if for_new_data else ProfileName.MR_STD
-        elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.128'):
+        elif sop_class_uid == '1.2.840.10008.5.1.4.1.1.128':
             return ProfileName.PET_STD_NEW if for_new_data else ProfileName.PET_STD
-        elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.7'):
+        elif sop_class_uid in ['1.2.840.10008.5.1.4.1.1.7', '1.2.840.10008.5.1.4.1.1.7.4']:
             return ProfileName.SC_NEW if for_new_data else ProfileName.SC
-            # Heather's spreadsheet goes onto mention 1.2.840.10008.5.1.4.1.1.7.4 here but the conditional
-            # clause above is sufficient to get to the same place, SC_NEW or SC.
-        # The test for 1.2.840.10008.5.1.4.1.1.66.4 must come before the test for NON_IMAGE_SOP_CLASS_UIDS
-        # since 1.2.840.10008.5.1.4.1.1.66 is in NON_IMAGE_SOP_CLASS_UIDS and is a substring of
-        # 1.2.840.10008.5.1.4.1.1.66.4.
-        elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.66.4'):
+        elif sop_class_uid in ['1.2.840.10008.5.1.4.1.1.66.4', '1.2.840.10008.5.1.4.1.1.66']:
             return ProfileName.SEG_NEW if for_new_data else ProfileName.SEG
         elif sop_class_uid in NON_IMAGE_SOP_CLASS_UIDS:
             return ProfileName.NON_IMAGE_DICOM_NEW if for_new_data else ProfileName.NON_IMAGE_DICOM
-        elif sop_class_uid.startswith('1.2.840.10008.5.1.4.1.1.1.1'):
+        elif sop_class_uid == '1.2.840.10008.5.1.4.1.1.1.1':
             return ProfileName.OTHER_IMAGE_NEW if for_new_data else ProfileName.OTHER_IMAGE
 
         return ProfileName.GENERIC
