@@ -137,6 +137,12 @@ def is_anonymized_value(s: str) -> bool:
     # Check if starts with "anon"
     if s_lower.startswith('anon'):
         return True
+
+    # A value consisting solely of Xs is a de-identification placeholder (e.g. "X",
+    # "XXXXXX", or PN-shaped "XXX^XXX"), but anything mixing Xs with other characters
+    # (e.g. "X123", "X_KINCAID") is not
+    if re.fullmatch(r'[x^\s]+', s_lower) and 'x' in s_lower:
+        return True
     
     # Also handle trailing carets/spaces
     normalized = s_stripped.rstrip('^').strip()

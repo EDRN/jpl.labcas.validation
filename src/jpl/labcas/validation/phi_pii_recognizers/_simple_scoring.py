@@ -71,6 +71,9 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         re.compile(r'^PATIENT\^TEST$', re.IGNORECASE),
         re.compile(r'^(TEST|DEMO|SYNTHETIC|DUMMY)$', re.IGNORECASE),
         re.compile(r'^(DE[-_]?IDENTIFIED|DEIDENTIFIED)$', re.IGNORECASE),
+        # A run of Xs (optionally in PN form like "XXX^XXX") is a de-identification
+        # placeholder, but "X123" or "X_KINCAID" is not
+        re.compile(r'^X+(\^X*)*$', re.IGNORECASE),
         re.compile(r'^DUMMY', re.IGNORECASE),  # Matches values starting with "DUMMY" (e.g., "DummyRefPhys!", "DummyOperName!")
         # De-identified placeholder patterns: prefix followed by digits
         re.compile(r'^REFPHYS\d+$', re.IGNORECASE),  # e.g., "REFPHYS554793"
