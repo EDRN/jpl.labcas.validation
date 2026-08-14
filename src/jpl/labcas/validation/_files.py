@@ -236,6 +236,8 @@ class PotentialFile:
                 return ProfileName.MR_STD_NEW if for_new_data else ProfileName.MR_STD
         elif sop_class_uid == '1.2.840.10008.5.1.4.1.1.128':
             return ProfileName.PET_STD_NEW if for_new_data else ProfileName.PET_STD
+        elif sop_class_uid == '1.2.840.10008.5.1.4.1.1.1':
+            return ProfileName.CR_NEW if for_new_data else ProfileName.CR
         elif sop_class_uid in ['1.2.840.10008.5.1.4.1.1.7', '1.2.840.10008.5.1.4.1.1.7.4']:
             return ProfileName.SC_NEW if for_new_data else ProfileName.SC
         elif sop_class_uid in ['1.2.840.10008.5.1.4.1.1.66.4', '1.2.840.10008.5.1.4.1.1.66']:

@@ -47,6 +47,8 @@ class ProfileName(Enum):
     RTSTRUCT_NEW        = 'RT Struct (for new data)'
     OTHER_IMAGE         = 'Other image'
     OTHER_IMAGE_NEW     = 'Other image (for new data)'
+    CR                  = 'Computed radiography'
+    CR_NEW              = 'Computed radiography (for new data)'
     GENERIC             = 'Generic'
     MISSING_IMAGE_TYPE  = 'Missing ImageType'
 
@@ -155,10 +157,10 @@ register_profile(Profile(ProfileName.CT_STD, 'ct_std_v1', DEFAULT_MINIMUM_FILE_S
     PixelRepresentationValidator(),
     ImagePositionPatientValidator(),
     ImageOrientationPatientValidator(),
-    CTDIvolValidator(),
     RescaleInterceptValidator(),
     RescaleSlopeValidator(),
 ], [
+    CTDIvolValidator(),
     SeriesDescriptionValidator(),
     ManufacturerValidator(),
     ModelNameValidator(),
@@ -600,6 +602,86 @@ register_profile(Profile(ProfileName.SC_NEW, 'sc_v2', DEFAULT_MINIMUM_FILE_SIZE,
     ContentTimeValidator(),
     WindowCenterValidator(),
     WindowWidthValidator(),
+]))
+
+register_profile(Profile(ProfileName.CR, 'cr_v1', DEFAULT_MINIMUM_FILE_SIZE, [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    ImageTypeValidator(),
+    SeriesDescriptionValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+    AcquisitionTimeValidator(),
+    ContentTimeValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+    WindowCenterValidator(),
+    WindowWidthValidator(),
+    BodyPartExaminedValidator(),
+    ViewPositionValidator(),
+    PatientOrientationValidator(),
+    CRLateralityValidator(),
+    CRExposureValidator(),
+], [
+    PixelSpacingValidator(),
+    ImagerPixelSpacingValidator(),
+    PatientPositionValidator(),
+    KVPValidator(),
+    DistanceSourceToDetectorValidator(),
+    DistanceSourceToPatientValidator(),
+    RelativeXRayExposureValidator(),
+    SensitivityValidator(),
+]))
+
+register_profile(Profile(ProfileName.CR_NEW, 'cr_v2', DEFAULT_MINIMUM_FILE_SIZE, [
+    SOPClassUIDValidator(),
+    ModalityValidator(),
+    ImageTypeValidator(),
+    SeriesDescriptionValidator(),
+    StudyInstanceUIDValidator(),
+    SeriesInstanceUIDValidator(),
+    SOPInstanceUIDValidator(),
+    SeriesNumberValidator(),
+    InstanceNumberValidator(),
+    ManufacturerValidator(),
+    ModelNameValidator(),
+    SoftwareVersionsValidator(),
+    AcquisitionTimeValidator(),
+    ContentTimeValidator(),
+    RowsValidator(),
+    ColumnsValidator(),
+    BitsAllocatedValidator(),
+    BitsStoredValidator(),
+    HighBitValidator(),
+    PixelRepresentationValidator(),
+    PhotometricInterpretationValidator(),
+    WindowCenterValidator(),
+    WindowWidthValidator(),
+    BodyPartExaminedValidator(),
+    ViewPositionValidator(),
+    PatientOrientationValidator(),
+    CRLateralityValidator(),
+    CRExposureValidator(),
+], [
+    PixelSpacingValidator(),
+    ImagerPixelSpacingValidator(),
+    PatientPositionValidator(),
+    KVPValidator(),
+    DistanceSourceToDetectorValidator(),
+    DistanceSourceToPatientValidator(),
+    RelativeXRayExposureValidator(),
+    SensitivityValidator(),
 ]))
 
 register_profile(Profile(ProfileName.CT_DER, 'ct_der_post_v1', DEFAULT_MINIMUM_FILE_SIZE, [

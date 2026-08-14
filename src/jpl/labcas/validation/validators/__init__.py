@@ -72,6 +72,21 @@ from ._rtstruct import (  # noqa: F401
     RTROIObservationsSequenceValidator,
 )
 
+from ._cr import (  # noqa: F401
+    BodyPartExaminedValidator,
+    ViewPositionValidator,
+    PatientOrientationValidator,
+    CRLateralityValidator,
+    CRExposureValidator,
+    ImagerPixelSpacingValidator,
+    PatientPositionValidator,
+    KVPValidator,
+    DistanceSourceToDetectorValidator,
+    DistanceSourceToPatientValidator,
+    RelativeXRayExposureValidator,
+    SensitivityValidator,
+)
+
 __all__ = [
     'ExperimentalModalityValidator', 'ExperimentalManufacturerValidator', 'ExperimentalWarningValidator',
     'AcquisitionDateValidator',
@@ -119,4 +134,9 @@ __all__ = [
     'StructureSetLabelValidator', 'StructureSetNameValidator', 'StructureSetDescriptionValidator',
     'ReferencedFrameOfReferenceSequenceValidator', 'StructureSetROISequenceValidator',
     'ROIContourSequenceValidator', 'RTROIObservationsSequenceValidator',
+    # CR Extensions:
+    'BodyPartExaminedValidator', 'ViewPositionValidator', 'PatientOrientationValidator',
+    'CRLateralityValidator', 'CRExposureValidator', 'ImagerPixelSpacingValidator',
+    'PatientPositionValidator', 'KVPValidator', 'DistanceSourceToDetectorValidator',
+    'DistanceSourceToPatientValidator', 'RelativeXRayExposureValidator', 'SensitivityValidator',
 ]
