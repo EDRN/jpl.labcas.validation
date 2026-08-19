@@ -25,9 +25,9 @@ _logger = logging.getLogger(__name__)
 class SeriesDescriptionValidator(RegexValidator):
     '''A validator that checks the SeriesDescription tag.'''
 
-    description = 'SeriesDescription must not be numeric-only'
+    description = 'SeriesDescription must be present and non-empty'
     tag = pydicom.tag.Tag((0x0008, 0x103E))
-    regex = re.compile(r'.*\D.*')
+    regex = re.compile(r'.+')
     
 
 class StudyInstanceUIDValidator(DICOMUIDValidator):
