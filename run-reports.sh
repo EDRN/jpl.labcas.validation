@@ -62,7 +62,7 @@ echo "Running PDAC" 1>&2
 for site in $PDAC; do
     echo "Running PDAC $site" 1>&2
     .venv/bin/validate-dicom-files --replace-event-id-column PatientID \
-	--new-data --output reports/Pre-diagnostic_PDAC_Images \
+	    --output reports/Pre-diagnostic_PDAC_Images \
         --site-id $site $base/Pre-diagnostic_PDAC_Images/$site
     echo "PDAC $site done" 1>&2
     clean_tmp
