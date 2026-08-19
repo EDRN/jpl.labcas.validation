@@ -80,8 +80,6 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         re.compile(r'^RECPHYS\d+$', re.IGNORECASE),  # e.g., "RECPHYS554793"
         re.compile(r'^OPERATOR\d+$', re.IGNORECASE),  # e.g., "OPERATOR554793"
         re.compile(r'^PATIENT\d+$', re.IGNORECASE),  # e.g., "PATIENT39180"
-        # Site-prefixed de-identified pseudonyms (e.g., "BCM_0001", "UPMC_0001")
-        re.compile(r'^[A-Z]{2,}[_-][0-9]+$', re.IGNORECASE),
         # DICOM Person Name (PN) format with NONE as a component (e.g., "NAME^NONE", "SOMETHING^NONE^OTHER")
         re.compile(r'^[A-Z0-9]+\^NONE(\^|$)', re.IGNORECASE),  # Matches PN values where any component is "NONE"
         re.compile(r'\^NONE(\^|$)', re.IGNORECASE),  # Matches any PN component that is "NONE"
@@ -94,6 +92,9 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
     
     # VRs (value representations) that commonly carry free text
     _free_text_VRs = {'AE', 'AS', 'CS', 'LO', 'LT', 'PN', 'SH', 'ST', 'UC', 'UT', 'UR'}
+
+    # Site-prefixed de-identified pseudonyms (e.g., "BCM_0003", "UPMC_00170_1", "XYZZY_4991_3_1")
+    _deidentified_pseudonym = re.compile(r'^[A-Z]{2,}(?:[_-][0-9]+)+$', re.IGNORECASE)
 
     # DICOM Person Name fields in structured PN form (e.g., DOE^JOHN, SMITH^ANNE^Q)
     _pn_structured = re.compile(r"^[A-Z0-9]{2,}(?:[-'][A-Z0-9]+)*(\^[A-Z0-9]{1,}(?:[-'][A-Z0-9]+)*)+$")
@@ -293,8 +294,21 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         s = (s or '').replace('\x00', '').strip()
         return s[:self._max_normalized_string] if len(s) > self._max_normalized_string else s
 
+    def _is_deidentified_pseudonym(self, s: str) -> bool:
+        '''Return True if `s` looks like a site-prefixed de-identified pseudonym.
+
+        Common LabCAS de-id formats include single- and multi-segment numeric suffixes
+        after a site code, e.g. "BCM_0003", "UPMC_00170_1", or "XYZZY_4991_3_1".
+        '''
+        if not s:
+            return False
+        normalized = s.rstrip('^').strip()
+        return bool(self._deidentified_pseudonym.match(normalized))
+
     def _is_anonymized_value(self, s: str) -> bool:
         '''Check if a value should be considered anonymized and skipped.'''
+        if self._is_deidentified_pseudonym(s):
+            return True
         return is_anonymized_value(s)
 
     def _is_pn_with_none(self, s: str) -> bool:
@@ -384,6 +398,8 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         
         # Strip trailing carets from PN values before checking anonymized patterns
         text_normalized = text.rstrip('^') if vr == 'PN' else text
+        if self._is_deidentified_pseudonym(text_normalized):
+            return 0.1
         for rx in self._anonymized_patterns:
             if rx.match(text_normalized) or rx.search(text_normalized):
                 return 0.1
