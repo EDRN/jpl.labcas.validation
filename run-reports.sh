@@ -70,7 +70,7 @@ done
 
 # Summarize the reports
 echo "Summarizing reports" 1>&2
-.venv/bin/summarize-validation-reports --output reports/summary.csv reports
+.venv/bin/summarize-validation-reports reports
 echo "All done" 1>&2
 
 # Final cleanup
