@@ -31,7 +31,7 @@ from ._findings import Finding, ErrorFinding
 from ._profiles import get_profile, ProfileName, PROFILES
 from ._functions import check_directory, iterate_paths
 from .const import PHI_PII_THRESHOLD, MINIMUM_MR_LOC_ROWS, MINIMUM_MR_LOC_COLUMNS
-from .phi_pii_recognizers import PHI_PII_RECOGNIZERS, DEFAULT_PHI_PII_RECOGNIZER
+from .phi_pii_recognizers import PHI_PII_RECOGNIZERS, DEFAULT_PHI_PII_RECOGNIZER, check_ocr_availability
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count, get_context
 from tqdm import tqdm
@@ -520,6 +520,10 @@ def main():
             print(PROFILES[name], end='\n\n')
         sys.exit(0)
     _logger.info('🧵 Multiprocessing start method: %s', get_context().get_start_method())
+    # Surface OCR availability up front: the simple-scoring recognizer relies on Tesseract for
+    # burned-in (pixel) PHI/PII detection, and a missing or too-old engine silently yields no findings.
+    if args.recognizer == 'simple-scoring':
+        check_ocr_availability()
     output_directory = args.output.strip()
     os.makedirs(output_directory, exist_ok=True)
     if not args.directory:

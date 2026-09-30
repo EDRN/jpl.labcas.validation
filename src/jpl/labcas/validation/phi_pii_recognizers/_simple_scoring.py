@@ -7,7 +7,7 @@ from .._files import PotentialFile
 from .._findings import Finding, HeaderFinding, ImageFinding, ErrorFinding
 from .._functions import is_anonymized_value, is_high_entropy_string
 from ..const import IMAGE_SCORE
-from PIL import Image
+from PIL import Image, ImageOps, ImageFilter
 from pydicom import datadict
 from typing import Iterable
 import pydicom, logging, argparse, re, pytesseract
@@ -16,6 +16,42 @@ import pydicom, logging, argparse, re, pytesseract
 pydicom.config.convert_wrong_length_to_UN = True
 
 _logger = logging.getLogger(__name__)
+
+# Minimum Tesseract major version known to reliably OCR cramped burned-in DICOM overlays. Older
+# engines (e.g. 4.x) ship a different LSTM model and frequently misread these overlays.
+_MIN_RECOMMENDED_TESSERACT_MAJOR = 5
+
+
+def check_ocr_availability() -> None:
+    '''Log the Tesseract OCR version and warn when it is missing or too old.
+
+    Pixel-based (burned-in) PHI/PII detection relies entirely on Tesseract via ``pytesseract``. When
+    Tesseract is missing, misconfigured, or an older major version, OCR silently returns text that no
+    longer matches our patterns, so a scan can report *zero* findings on a file that clearly contains
+    PHI/PII. We surface that here at startup rather than letting it fail invisibly.
+    '''
+    try:
+        version = pytesseract.get_tesseract_version()
+    except Exception as ex:
+        _logger.error(
+            '🚨 Tesseract OCR is unavailable (%s). Burned-in (pixel) PHI/PII detection is DISABLED, '
+            'so scans may report ZERO findings on images that actually contain PHI/PII. Install '
+            'Tesseract (see the README) and ensure it is on PATH.', ex
+        )
+        return
+    try:
+        major = int(re.match(r'\s*(\d+)', str(version)).group(1))
+    except (AttributeError, ValueError):
+        major = None
+    if major is not None and major < _MIN_RECOMMENDED_TESSERACT_MAJOR:
+        _logger.warning(
+            '⚠️ Tesseract OCR %s is older than the recommended %d.x. Older engines use a different '
+            'OCR model and may misread cramped burned-in overlays (e.g. "DOB" → "Doe", digits → '
+            'letters), causing pixel PHI/PII to be missed. Upgrading to Tesseract %d.x is strongly '
+            'recommended.', version, _MIN_RECOMMENDED_TESSERACT_MAJOR, _MIN_RECOMMENDED_TESSERACT_MAJOR
+        )
+    else:
+        _logger.info('🔤 Tesseract OCR version %s detected for pixel PHI/PII detection', version)
 
 
 class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
@@ -105,7 +141,15 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         'PHONE': re.compile(r'\b(?:\+\d{1,3}[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})\b'),
         'SSN': re.compile(r'\b\d{3}[- ]?\d{2}[- ]?\d{4}\b'),
         'MRN_like': re.compile(r'\b(?:MRN|Med(?:ical)?\s*Record)\s*[:#]?\s*[A-Z0-9\-]{3,}\b', re.IGNORECASE),
-        'DOB_like': re.compile(r'(?:DOB|Birth\s*Date)\s*[:#]?\s*(?:\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})', re.IGNORECASE),
+        # DOB label + date. OCR of cramped burned-in overlays is version-dependent and mangles both
+        # the label ("DOB" → "D0B"/"DOE"/"0B") and the digits ("0" → "O/o/Q", "1" → "l/I/i"), so we
+        # tolerate the common confusions here. The label anchor keeps false positives low even though
+        # separators between date parts are optional (tokens are OCR-joined without spaces).
+        'DOB_like': re.compile(
+            r'(?:D[O0Q][B8E]|Birth\s*Date)\s*[:#]?\s*'
+            r'(?:[0-9OoQIli]{1,2}[-/.\s]?[0-9OoQIli]{1,2}[-/.\s]?[0-9OoQIli]{2,4})',
+            re.IGNORECASE,
+        ),
         # Conservative 'Firstname Lastname' structure (kept for non-PN text where allowed)
         'NAME_like': re.compile(r"\b([A-Z][a-z]+(?:[-'][A-Z][a-z]+)?\s+[A-Z][a-z]+)\b"),
         'URL': re.compile(r'\bhttps?://[^\s]+', re.IGNORECASE),
@@ -206,8 +250,86 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         # Whew
         return normalized[:max_frames]
 
-    def _recognize_characters(self, frame: Image.Image) -> tuple[str, list[tuple[int, int, int, int]]]:
-        '''Recognize characters in the given frame using OCR.'''
+    # Upscale factor applied before OCR; more pixels helps Tesseract on cramped overlay text. We only
+    # upscale when the image is small enough that the result stays within a sane size.
+    _ocr_upscale = 3
+    _ocr_max_dimension = 4000
+
+    @staticmethod
+    def _otsu_threshold(histogram: list[int]) -> int:
+        '''Compute an Otsu binarization threshold (0..255) from a grayscale histogram.
+
+        Otsu's method picks the threshold that maximizes between-class variance, i.e. the value that
+        best separates dark text from a light background (or vice-versa) without any hard-coded cutoff.
+        Implemented here to avoid pulling in OpenCV/NumPy just for thresholding.
+        '''
+        total = sum(histogram)
+        if total == 0:
+            return 127
+        sum_all = sum(i * h for i, h in enumerate(histogram))
+        weight_b, sum_b, max_var, threshold = 0, 0, -1.0, 127
+        for i in range(256):
+            weight_b += histogram[i]
+            if weight_b == 0:
+                continue
+            weight_f = total - weight_b
+            if weight_f == 0:
+                break
+            sum_b += i * histogram[i]
+            mean_b = sum_b / weight_b
+            mean_f = (sum_all - sum_b) / weight_f
+            between = weight_b * weight_f * (mean_b - mean_f) ** 2
+            if between > max_var:
+                max_var, threshold = between, i
+        return threshold
+
+    def _ocr_image_variants(self, frame: Image.Image) -> Iterable[Image.Image]:
+        '''Yield several OCR-ready renderings of `frame`.
+
+        OCR of cramped, low-contrast, burned-in overlay text is highly sensitive to *both* the
+        Tesseract version and the exact preprocessing: a transform that helps one engine can wipe
+        out faint text for another. We have observed a low-contrast date that the raw image OCRs
+        perfectly but that global binarization (and even plain upscaling) erases — while an older
+        engine reads nothing from the raw image at all. Rather than bet on a single "best" rendering,
+        we OCR *several* renderings and union the results downstream, so preprocessing can only ever
+        add detections, never remove the ones another rendering already found.
+
+        Yields, in order:
+          1. the raw frame (today's behavior and our regression floor);
+          2. a contrast-stretched, upscaled, lightly-sharpened grayscale (gives weaker/older engines
+             more pixels and separation to work with on small overlay text);
+          3. an Otsu-binarized version of (2) (helps crisp overlays on engines that struggle with
+             anti-aliasing).
+        '''
+        # 1) Always OCR the raw frame first.
+        yield frame
+        try:
+            gray = frame.convert('L')
+            # 2) Contrast-stretched + upscaled + unsharp grayscale.
+            enhanced = ImageOps.autocontrast(gray, cutoff=1)
+            if max(gray.size) * self._ocr_upscale <= self._ocr_max_dimension:
+                enhanced = enhanced.resize(
+                    (gray.width * self._ocr_upscale, gray.height * self._ocr_upscale), Image.LANCZOS
+                )
+            enhanced = enhanced.filter(ImageFilter.UnsharpMask(radius=1, percent=120))
+            yield enhanced
+            # 3) Otsu-binarized (dark text on a light background).
+            threshold = self._otsu_threshold(enhanced.histogram())
+            binary = enhanced.point(lambda p, t=threshold: 255 if p > t else 0, mode='L')
+            pixels = binary.width * binary.height
+            if pixels and (sum(binary.getdata()) / pixels) < 128:
+                binary = ImageOps.invert(binary)
+            yield binary
+        except Exception:
+            _logger.exception('💥 OCR preprocessing failed for a frame; using the raw image only')
+
+    def _ocr_single(self, frame: Image.Image) -> tuple[str, list[tuple[int, int, int, int]]]:
+        '''Run Tesseract on a single (already-rendered) image and return (text, boxes).
+
+        Tokens are concatenated with no separator because OCR of overlays frequently drops the spaces
+        between a burned-in label and its value (e.g. "DOB:" + "01/01/1970" → "DOB:01/01/1970"); the
+        `_pixel_patterns` are written to match that collapsed form.
+        '''
         try:
             data = pytesseract.image_to_data(frame, output_type=pytesseract.Output.DICT)
             n = len(data.get('text', []))
@@ -224,7 +346,22 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
                 t = pytesseract.image_to_string(frame)
                 return t, []
             except Exception:
-                return '', []   
+                return '', []
+
+    def _recognize_characters(self, frame: Image.Image) -> tuple[str, list[tuple[int, int, int, int]]]:
+        '''Recognize characters in the given frame using OCR across several renderings.
+
+        Each rendering is OCR'd independently and the results are unioned. Renderings are joined with
+        a space so that patterns cannot accidentally span across two different renderings' text.
+        '''
+        texts: list[str] = []
+        boxes: list[tuple[int, int, int, int]] = []
+        for variant in self._ocr_image_variants(frame):
+            text, variant_boxes = self._ocr_single(variant)
+            if text:
+                texts.append(text)
+                boxes.extend(variant_boxes)
+        return ' '.join(texts), boxes
 
     def _recognize_pixels(self, potential_file: PotentialFile) -> list[Finding]:
         '''Recognize PHI/PII in the pixels of the given DICOM dataset.'''
@@ -237,11 +374,18 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
                 file=potential_file, value='💥 Unexpected exception extracting pixel frames', error_message=str(ex)
             ))
         if not frames: return findings
+        # We OCR several renderings per frame and union them, so the same value can match more than
+        # once; dedupe on (frame index, pattern, matched text) to avoid duplicate findings.
+        seen: set[tuple[int, str, str]] = set()
         for idx, frame in enumerate(frames):
             text, boxes = self._recognize_characters(frame)        
             if not text: continue
             for key, rx in self._pixel_patterns.items():
                 for m in rx.finditer(text):
+                    dedupe_key = (idx, key, m.group(0).strip().casefold())
+                    if dedupe_key in seen:
+                        continue
+                    seen.add(dedupe_key)
                     excerpt = text[max(0, m.start() - 24):m.end() + 24]  # Grab 24 characters of context on each side
                     # Skip anonymized values (starts with "anon" or matches "Doe John" patterns)
                     if self._is_anonymized_value(excerpt):
