@@ -21,7 +21,7 @@ Later, you can then run:
 
     summarize-validation-reports /labcas-data/labcas-backend/reports/edrn
 
-to get the summary.
+to write ``summary.csv`` and ``phi.csv`` into each collection folder.
 '''
 
 from ._argparse import add_standard_argparse_options
