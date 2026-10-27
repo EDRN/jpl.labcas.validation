@@ -77,11 +77,22 @@ def _extract_frames(ds: pydicom.Dataset, max_frames: int = 4) -> list:
     return normalized[:max_frames]
 
 
-def _recognize_characters(frame: Image.Image) -> str:
+def _recognize_characters(
+    frame: Image.Image,
+    *,
+    frame_index: int = 0,
+    image_dir: str | None = None,
+    stem: str = 'frame',
+) -> str:
     '''Recognize characters in the given frame using OCR.
 
     Matches ``SimpleScoring_PHI_PII_Recognizer._recognize_characters`` (text only).
+    When `image_dir` is set, the OCR'd frame is also written as a PNG under that directory.
     '''
+    if image_dir is not None:
+        out_path = os.path.join(image_dir, f'{stem}-frame{frame_index}-raw.png')
+        frame.save(out_path)
+        print(f'Wrote {out_path}', file=sys.stderr)
     try:
         data = pytesseract.image_to_data(frame, output_type=pytesseract.Output.DICT)
         n = len(data.get('text', []))
@@ -98,7 +109,7 @@ def _recognize_characters(frame: Image.Image) -> str:
             return ''
 
 
-def _extract_text(path: str) -> list[str]:
+def _extract_text(path: str, *, generate_images: bool = False) -> list[str]:
     '''Return OCR text strings for up to four frames of the DICOM at `path`.'''
     if not os.path.isfile(path):
         raise FileNotFoundError(f'No such file: {path}')
@@ -109,9 +120,13 @@ def _extract_text(path: str) -> list[str]:
     frames = _extract_frames(ds)
     if not frames:
         raise ValueError(f'No pixel frames available in {path}')
+    image_dir = (os.path.dirname(os.path.abspath(path)) or '.') if generate_images else None
+    stem = os.path.splitext(os.path.basename(path))[0]
     results = []
-    for frame in frames:
-        text = _recognize_characters(frame)
+    for idx, frame in enumerate(frames):
+        text = _recognize_characters(
+            frame, frame_index=idx, image_dir=image_dir, stem=stem,
+        )
         if text:
             results.append(text)
     return results
@@ -126,9 +141,13 @@ def main():
         'dicom_file', type=str,
         help='Path to a single DICOM file on disk',
     )
+    parser.add_argument(
+        '-g', '--generate-images', action='store_true',
+        help='Write each OCR\'d frame as a PNG next to the DICOM file',
+    )
     args = parser.parse_args()
     try:
-        texts = _extract_text(args.dicom_file)
+        texts = _extract_text(args.dicom_file, generate_images=args.generate_images)
     except Exception as ex:
         print(str(ex), file=sys.stderr)
         sys.exit(1)
