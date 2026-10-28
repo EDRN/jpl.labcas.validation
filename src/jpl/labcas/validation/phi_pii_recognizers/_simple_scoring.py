@@ -132,6 +132,10 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
     # Site-prefixed de-identified pseudonyms (e.g., "BCM_0003", "UPMC_00170_1", "XYZZY_4991_3_1")
     _deidentified_pseudonym = re.compile(r'^[A-Z]{2,}(?:[_-][0-9]+)+$', re.IGNORECASE)
 
+    # Dataset names substituted for PatientName (e.g., "4H0163_BSL", "4H0258_BSL").
+    # Some sites de-identify by writing the dataset id into the name field.
+    _dataset_name_pseudonym = re.compile(r'^[0-9]+[A-Z]+[0-9]+_[A-Z]+$', re.IGNORECASE)
+
     # DICOM Person Name fields in structured PN form (e.g., DOE^JOHN, SMITH^ANNE^Q)
     _pn_structured = re.compile(r"^[A-Z0-9]{2,}(?:[-'][A-Z0-9]+)*(\^[A-Z0-9]{1,}(?:[-'][A-Z0-9]+)*)+$")
 
@@ -344,15 +348,20 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
         return s[:self._max_normalized_string] if len(s) > self._max_normalized_string else s
 
     def _is_deidentified_pseudonym(self, s: str) -> bool:
-        '''Return True if `s` looks like a site-prefixed de-identified pseudonym.
+        '''Return True if `s` looks like an already de-identified pseudonym.
 
         Common LabCAS de-id formats include single- and multi-segment numeric suffixes
         after a site code, e.g. "BCM_0003", "UPMC_00170_1", or "XYZZY_4991_3_1".
+        Some sites instead replace PatientName with the dataset name, e.g.
+        "4H0163_BSL" or "4H0258_BSL".
         '''
         if not s:
             return False
         normalized = s.rstrip('^').strip()
-        return bool(self._deidentified_pseudonym.match(normalized))
+        return bool(
+            self._deidentified_pseudonym.match(normalized)
+            or self._dataset_name_pseudonym.match(normalized)
+        )
 
     def _is_anonymized_value(self, s: str) -> bool:
         '''Check if a value should be considered anonymized and skipped.'''
