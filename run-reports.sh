@@ -73,6 +73,10 @@ echo "Summarizing all reports" 1>&2
 .venv/bin/summarize-validation-reports reports
 for collection in Prostate_MRI Lung_Team_Project_2 Pre-diagnostic_PDAC_Images; do
     echo "Summarizing $collection by site" 1>&2
+    mkdir --parents reports/$collection/sites
+    mv reports/$collection/*.csv reports/$collection/sites
+    mv reports/$collection/sites/phi.csv reports/$collection
+    mv reports/$collection/sites/summary.csv reports/$collection
     .venv/bin/summarize-site-reports reports/$collection
 done
 echo "All done" 1>&2
