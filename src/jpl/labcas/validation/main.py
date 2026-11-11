@@ -394,50 +394,67 @@ def _create_solr_paths_iterator(
 ):
     '''Create a function that iterates over paths in scan_directory using the given Solr URL.
 
-    `collection_directory` is used to derive LabCAS file IDs so IDs still start at the collection
-    folder even when `scan_directory` targets a specific site subset.
+    Files are matched to Solr documents by DICOM SOP Instance UID rather than by filesystem path,
+    since LabCAS archive paths and local scan paths may differ. `collection_directory` identifies
+    the collection in which those UIDs must exist.
     '''
     _logger.info('🔍 Creating Solr paths iterator for %s with batch size %d', scan_directory, batch_size)
     if site_id_override:
         _logger.info('🔍 Using overridden site ID %s', site_id_override)
 
-    def _collect_existing_paths(solr: pysolr.Solr, ids_to_paths: dict[str, str]) -> set[PotentialFile]:
-        if not ids_to_paths:
+    collection_name = os.path.basename(os.path.normpath(collection_directory))
+
+    def _first_value(doc: dict, field: str, default: str) -> str:
+        value = doc.get(field)
+        if isinstance(value, list):
+            value = value[0] if value else None
+        return str(value) if value is not None else default
+
+    def _collect_existing_paths(solr: pysolr.Solr, uids_to_paths: dict[str, list[str]]) -> set[PotentialFile]:
+        if not uids_to_paths:
             return set()
-        # Build a single query that checks all IDs in this batch
-        quoted_ids = ' OR '.join(f'"{file_id}"' for file_id in ids_to_paths.keys())
-        query = f'id:({quoted_ids})'
-        results = solr.search(query, sort='id asc', rows=len(ids_to_paths), fl=['id', 'eventID', 'BlindedSiteID'])
+        quoted_uids = ' OR '.join(f'"{uid}"' for uid in uids_to_paths)
+        query = f'dicom_SOPInstanceUID:({quoted_uids})'
+        results = solr.search(
+            query,
+            fq=f'CollectionId:"{collection_name}"',
+            sort='id asc',
+            rows=len(uids_to_paths),
+            fl=['dicom_SOPInstanceUID', 'eventID', 'BlindedSiteID'],
+        )
         existing_paths: set[PotentialFile] = set()
         for doc in results.docs:
-            doc_id = doc.get('id')
-            event_id = doc.get('eventID', ['«unknown event»'])[0]
-            doc_site_id = doc.get('BlindedSiteID', ['«unknown site»'])[0]
-            if isinstance(doc_id, list):
-                doc_id = doc_id[0] if doc_id else None
-            if doc_id and doc_id in ids_to_paths:
-                existing_paths.add(PotentialFile(
-                    ids_to_paths[doc_id],
-                    site_id=site_id_override or doc_site_id,
-                    event_id=event_id,
-                    event_id_tag=event_id_tag,
-                ))
+            event_id = _first_value(doc, 'eventID', '«unknown event»')
+            doc_site_id = _first_value(doc, 'BlindedSiteID', '«unknown site»')
+            doc_uids = doc.get('dicom_SOPInstanceUID', [])
+            if not isinstance(doc_uids, list):
+                doc_uids = [doc_uids]
+            for uid in (str(value) for value in doc_uids):
+                for path in uids_to_paths.get(uid, []):
+                    existing_paths.add(PotentialFile(
+                        path,
+                        site_id=site_id_override or doc_site_id,
+                        event_id=event_id,
+                        event_id_tag=event_id_tag,
+                    ))
         return existing_paths
 
-    collection_name = os.path.basename(collection_directory)
     solr = pysolr.Solr(solr_url, verify=False)
     paths: set[PotentialFile] = set()
-    batch: dict[str, str] = {}
+    batch: dict[str, list[str]] = {}
 
     # First pass to populate `paths` with files both in the filesystem and in Solr
     for path in iterate_paths(scan_directory):
         try:
-            collection_index = path.index(collection_name)
-        except ValueError:
-            _logger.debug('⚠️ Skipping %s because it does not contain collection name %s', path, collection_name)
+            ds = pydicom.dcmread(path, stop_before_pixels=True, specific_tags=['SOPInstanceUID'])
+            sop_instance_uid = str(getattr(ds, 'SOPInstanceUID', '')).strip('\x00').strip()
+        except (IOError, pydicom.errors.InvalidDicomError) as ex:
+            _logger.debug('⚠️ Skipping %s because its SOP Instance UID cannot be read: %s', path, ex)
             continue
-        file_id = path[collection_index:]
-        batch[file_id] = path
+        if not sop_instance_uid:
+            _logger.debug('⚠️ Skipping %s because it has no SOP Instance UID', path)
+            continue
+        batch.setdefault(sop_instance_uid, []).append(path)
         if len(batch) >= batch_size:
             paths.update(_collect_existing_paths(solr, batch))
             batch.clear()
