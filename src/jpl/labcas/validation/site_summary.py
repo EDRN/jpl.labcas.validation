@@ -83,10 +83,15 @@ class SiteStats:
         default_factory=lambda: {key: set() for key in _CATEGORY_KEYS}
     )
     file_keys: set[str] = field(default_factory=set)
+    pet_file_keys: set[str] = field(default_factory=set)
 
     @property
     def total_events(self) -> int:
         return len(self.event_ids)
+
+    @property
+    def pet_files(self) -> int:
+        return len(self.pet_file_keys)
 
     def affected_count(self, category: str) -> int:
         return len(self.affected[category])
@@ -162,7 +167,6 @@ def _load_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageF
     ]
     for path, index in candidates:
         if os.path.isfile(path):
-            _logger.critical('Loading font %s with index %d', path, index)
             try:
                 return ImageFont.truetype(path, size=size, index=index)
             except OSError:
@@ -182,6 +186,8 @@ def _aggregate_site_csv(csv_path: str) -> SiteStats:
             event_id = (row.get('Event ID') or '').strip()
             file_path = (row.get('File Path') or '').strip()
             finding = _normalize_finding(row.get('Findings') or '')
+            # Column F in the site CSV header is Profile.
+            profile = (row.get('Profile') or '').strip()
 
             if not event_id:
                 continue
@@ -192,7 +198,10 @@ def _aggregate_site_csv(csv_path: str) -> SiteStats:
 
             stats.event_ids.add(event_id)
             if site_id and event_id and file_path:
-                stats.file_keys.add(_unique_file_name(site_id, event_id, file_path))
+                file_key = _unique_file_name(site_id, event_id, file_path)
+                stats.file_keys.add(file_key)
+                if 'PET' in profile:
+                    stats.pet_file_keys.add(file_key)
 
             category = _FINDING_TO_CATEGORY.get(finding)
             if category is not None:
@@ -570,12 +579,19 @@ def write_png(stats: ReportStats, output_path: str, title: str) -> None:
     _logger.info('Wrote %s', output_path)
 
 
+def write_pet_file_counts(stats: ReportStats) -> None:
+    '''Write per-site distinct PET-profile file counts to stdout.'''
+    for site in stats.sites:
+        print(f'Site {site.site_id}: {site.pet_files} PET files', flush=True)
+
+
 def generate_site_summary(report_folder: str, title: str = _DEFAULT_TITLE) -> ReportStats:
     '''Aggregate and write PNG, CSV, and Markdown into report_folder.'''
     stats = aggregate_report(report_folder)
     write_csv(stats, os.path.join(report_folder, _CSV_NAME))
     write_markdown(stats, os.path.join(report_folder, _MD_NAME), title=title)
     write_png(stats, os.path.join(report_folder, _PNG_NAME), title=title)
+    write_pet_file_counts(stats)
     _logger.info(
         'Summary: %d sites, %d EventIDs, %s validated DICOM files',
         stats.total_sites, stats.total_events, f'{stats.total_files:,}',

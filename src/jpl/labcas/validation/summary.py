@@ -33,7 +33,7 @@ _phi_pii_removal_re = re.compile(r'\), .+$')
 _completeness_and_format_removal_re = re.compile(r'— please review for completeness and format')
 _sample_value_removal_re = re.compile(r'(, )?«[^»]*»,?')
 
-_OUTPUT_CSV_NAMES = frozenset({'summary.csv', 'phi.csv'})
+_OUTPUT_CSV_NAMES = frozenset({'summary.csv', 'phi.csv', 'validation_summary.csv'})
 _SUMMARY_CSV_HEADER = [
     'Issue', 'Profile', 'Total Files with this Issue', 'Percent of all Files',
     'Number of Sites with Issue',
