@@ -267,7 +267,6 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
             boxes, texts = [], []
             for i in range(n):
                 txt = (data.get('text')[i] or '').strip()
-                _logger.critical('🔍 txt: %s', txt)
                 if not txt: continue
                 texts.append(txt)
                 x, y, w, h = data.get('left')[i], data.get('top')[i], data.get('width')[i], data.get('height')[i]
