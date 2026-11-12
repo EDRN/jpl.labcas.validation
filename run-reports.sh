@@ -38,15 +38,6 @@ mkdir --parents reports
 # Marker
 date 1>&2
 
-# Now Prostate_MRI
-echo "Running Prostate_MRI" 1>&2
-for site in $Prostate_MRI; do
-    echo "Running Prostate_MRI $site" 1>&2
-    .venv/bin/validate-dicom-files --url $solr --output reports/Prostate_MRI --subset $site $base/Prostate_MRI
-    echo "Prostate_MRI $site done" 1>&2
-    clean_tmp
-done
-
 # Now Lung_Team_Project_2
 echo "Running Lung_Team_Project_2" 1>&2
 for site in $Lung_Team_Project_2; do
@@ -54,6 +45,15 @@ for site in $Lung_Team_Project_2; do
     .venv/bin/validate-dicom-files --url $solr --output reports/Lung_Team_Project_2 \
         --subset $site $base/Lung_Team_Project_2
     echo "Lung_Team_Project_2 $site done" 1>&2
+    clean_tmp
+done
+
+# Now Prostate_MRI
+echo "Running Prostate_MRI" 1>&2
+for site in $Prostate_MRI; do
+    echo "Running Prostate_MRI $site" 1>&2
+    .venv/bin/validate-dicom-files --url $solr --output reports/Prostate_MRI --subset $site $base/Prostate_MRI
+    echo "Prostate_MRI $site done" 1>&2
     clean_tmp
 done
 
