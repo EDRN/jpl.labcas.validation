@@ -118,13 +118,17 @@ def is_high_entropy_anonymized_token(s: str) -> bool:
     return _part_is_token(normalized)
 
 
-def is_anonymized_value(s: str) -> bool:
+def is_anonymized_value(s: str, *, include_high_entropy: bool = True) -> bool:
     '''Check if a value should be considered anonymized and skipped.
     
     Returns True if the value:
     - Starts with "anon" (case-insensitive), OR
     - Matches "Doe John", "Doe^John", "John Doe", or "John^Doe" (case-insensitive), OR
-    - Looks like a high-entropy pre-anonymized replacement token
+    - Looks like a high-entropy pre-anonymized replacement token (when ``include_high_entropy``)
+
+    Set ``include_high_entropy=False`` for OCR excerpts: pixel OCR concatenates tokens
+    without spaces, so real names like ``COOPERGLENNEDWARD`` look high-entropy and would
+    be incorrectly skipped.
     '''
     if not s:
         return False
@@ -148,7 +152,7 @@ def is_anonymized_value(s: str) -> bool:
     normalized = s_stripped.rstrip('^').strip()
     normalized_lower = normalized.lower()
 
-    if is_high_entropy_anonymized_token(normalized):
+    if include_high_entropy and is_high_entropy_anonymized_token(normalized):
         return True
     
     # Check for "Doe John" patterns (case-insensitive)

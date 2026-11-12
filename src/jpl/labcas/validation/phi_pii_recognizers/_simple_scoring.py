@@ -267,6 +267,7 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
             boxes, texts = [], []
             for i in range(n):
                 txt = (data.get('text')[i] or '').strip()
+                _logger.critical('🔍 txt: %s', txt)
                 if not txt: continue
                 texts.append(txt)
                 x, y, w, h = data.get('left')[i], data.get('top')[i], data.get('width')[i], data.get('height')[i]
@@ -296,8 +297,9 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
             for key, rx in self._pixel_patterns.items():
                 for m in rx.finditer(text):
                     excerpt = text[max(0, m.start() - 24):m.end() + 24]  # Grab 24 characters of context on each side
-                    # Skip anonymized values (starts with "anon" or matches "Doe John" patterns)
-                    if self._is_anonymized_value(excerpt):
+                    # Skip explicit anonymized placeholders only. High-entropy token heuristics
+                    # false-positive on OCR-joined real names (e.g. COOPERGLENNEDWARD).
+                    if self._is_anonymized_value(excerpt, include_high_entropy=False):
                         continue
                     finding = ImageFinding(
                         file=potential_file, value=self._displayable_str(excerpt), pattern=key,
@@ -363,11 +365,11 @@ class SimpleScoring_PHI_PII_Recognizer(PHI_PII_Recognizer):
             or self._dataset_name_pseudonym.match(normalized)
         )
 
-    def _is_anonymized_value(self, s: str) -> bool:
+    def _is_anonymized_value(self, s: str, *, include_high_entropy: bool = True) -> bool:
         '''Check if a value should be considered anonymized and skipped.'''
         if self._is_deidentified_pseudonym(s):
             return True
-        return is_anonymized_value(s)
+        return is_anonymized_value(s, include_high_entropy=include_high_entropy)
 
     def _is_pn_with_none(self, s: str) -> bool:
         '''Check if a DICOM Person Name (PN) value contains "NONE" as any component.
