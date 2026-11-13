@@ -39,7 +39,7 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 from pydicom import datadict
 from pydicom.tag import Tag, BaseTag
 from typing import Iterable
-import argparse, sys, logging, os, pydicom, pysolr, os.path, re, tempfile, sqlite3, threading, traceback, humanize, warnings
+import argparse, json, sys, logging, os, pydicom, pysolr, os.path, re, tempfile, sqlite3, threading, traceback, humanize, warnings
 
 
 __doc__ = '🛂 EDRN DICOM Validation: check for PHI/PII and compliance with EDRN core and MR requirements for DICOM tags'
@@ -132,6 +132,20 @@ def _tag_display_name(tag: BaseTag) -> str:
     return keyword if keyword else str(tag)
 
 
+def _dedupe_tags(tags: list[BaseTag] | None) -> list[BaseTag]:
+    '''Return tags in first-seen order, dropping later duplicates.'''
+    if not tags:
+        return []
+    seen: set[BaseTag] = set()
+    unique: list[BaseTag] = []
+    for tag in tags:
+        if tag in seen:
+            continue
+        seen.add(tag)
+        unique.append(tag)
+    return unique
+
+
 def _init_worker(
     recognizer_name: str, recognizer_args: dict, db_path: str = None, db_write_lock=None, quiet_console: bool = False
 ):
@@ -167,9 +181,10 @@ def _write_finding_to_db(conn: sqlite3.Connection, finding: Finding):
         INSERT INTO findings (
             file_path, site_id, event_id, file_name, profile_name, sop_class_uid,
             study_instance_uid, series_instance_uid,
-            finding_type, value, score, tag, description, pattern, index_val
+            finding_type, value, score, tag, description, pattern, index_val,
+            extra_reporting_values
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         finding.file.path,
         finding.file.site_id,
@@ -185,7 +200,8 @@ def _write_finding_to_db(conn: sqlite3.Connection, finding: Finding):
         tag_str,
         description,
         pattern,
-        index
+        index,
+        json.dumps(finding.file.extra_reporting_values or []),
     ))
 
 
@@ -290,7 +306,8 @@ def _create_findings_db(db_path: str):
                 tag TEXT,
                 description TEXT,
                 pattern TEXT,
-                index_val INTEGER
+                index_val INTEGER,
+                extra_reporting_values TEXT
             )
         ''')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_file_path ON findings(file_path)')
@@ -376,7 +393,12 @@ def validate_single(
     return results
 
 
-def _create_non_solr_paths_iterator(directory: str, site_id: str | None = None, event_id_tag: BaseTag | None = None):
+def _create_non_solr_paths_iterator(
+    directory: str,
+    site_id: str | None = None,
+    event_id_tag: BaseTag | None = None,
+    extra_reporting_tags: list[BaseTag] | None = None,
+):
     '''Create a function that iterates over the paths in the given directory.'''
     _logger.info('🔍 Creating non-Solr paths iterator for %s', directory)
     if site_id:
@@ -384,13 +406,19 @@ def _create_non_solr_paths_iterator(directory: str, site_id: str | None = None, 
 
     def _iterate() -> Iterable[PotentialFile]:
         for path in iterate_paths(directory):
-            yield PotentialFile(path, site_id=site_id, event_id_tag=event_id_tag)
+            yield PotentialFile(
+                path,
+                site_id=site_id,
+                event_id_tag=event_id_tag,
+                extra_reporting_tags=extra_reporting_tags,
+            )
     return _iterate
 
 
 def _create_solr_paths_iterator(
     solr_url: str, scan_directory: str, collection_directory: str, batch_size: int = 100,
     site_id_override: str | None = None, event_id_tag: BaseTag | None = None,
+    extra_reporting_tags: list[BaseTag] | None = None,
 ):
     '''Create a function that iterates over paths in scan_directory using the given Solr URL.
 
@@ -436,6 +464,7 @@ def _create_solr_paths_iterator(
                         site_id=site_id_override or doc_site_id,
                         event_id=event_id,
                         event_id_tag=event_id_tag,
+                        extra_reporting_tags=extra_reporting_tags,
                     ))
         return existing_paths
 
@@ -529,6 +558,15 @@ def main():
             'event IDs, or to override the event ID—for example, with patient IDs—in collections that do'
         ),
     )
+    parser.add_argument(
+        '--extra-reporting-column', action='append', type=_tag_spec_type, metavar='TAG',
+        dest='extra_reporting_columns', default=None,
+        help=(
+            'Append a right-side CSV column with the value of a DICOM tag for each finding row; '
+            'repeat for multiple columns (order preserved; duplicates kept once). TAG may be a '
+            'keyword such as CTDIvol or a (group,element) hex ID such as 0018,9345'
+        ),
+    )
     parser.add_argument('directory', nargs='?', help='Directory to scan for DICOM files')
     args = parser.parse_args()
     _configure_logging(args.loglevel, args.log_file)
@@ -564,6 +602,10 @@ def main():
     event_id_column_name = (
         _tag_display_name(args.replace_event_id_column) if args.replace_event_id_column else 'Event ID'
     )
+    extra_reporting_tags = _dedupe_tags(args.extra_reporting_columns)
+    extra_reporting_column_names = [_tag_display_name(tag) for tag in extra_reporting_tags]
+    if extra_reporting_column_names:
+        _logger.info('🔍 Extra reporting columns: %s', ', '.join(extra_reporting_column_names))
 
     if args.url:
         solr_url = args.url.strip()
@@ -574,12 +616,14 @@ def main():
         file_generator = _create_solr_paths_iterator(
             solr_url, scan_directory, collection_directory, site_id_override=site_id_override,
             event_id_tag=args.replace_event_id_column,
+            extra_reporting_tags=extra_reporting_tags,
         )
     else:
         _logger.info('🔍 Not using Solr (no URL provided)')
         solr_url = None
         file_generator = _create_non_solr_paths_iterator(
             scan_directory, site_id=site_id_override, event_id_tag=args.replace_event_id_column,
+            extra_reporting_tags=extra_reporting_tags,
         )
 
     db_path = None
@@ -592,13 +636,19 @@ def main():
             if args.concurrency == 1:
                 findings = validate_single(args.recognizer, args, file_generator, args.new_data)
                 _logger.info('🔍 Found %d findings', len(findings))
-                report = Report(findings=findings, score=args.score, event_id_column_name=event_id_column_name)
+                report = Report(
+                    findings=findings, score=args.score, event_id_column_name=event_id_column_name,
+                    extra_reporting_column_names=extra_reporting_column_names,
+                )
             else:
                 db_path, total_findings = validate_pool(
                     args.recognizer, args, args.concurrency, file_generator, args.new_data
                 )
                 _logger.info('🔍 Found %d findings', total_findings)
-                report = Report(db_path=db_path, score=args.score, event_id_column_name=event_id_column_name)
+                report = Report(
+                    db_path=db_path, score=args.score, event_id_column_name=event_id_column_name,
+                    extra_reporting_column_names=extra_reporting_column_names,
+                )
                 _logger.debug('🔍 Wrote database in: %s', db_path)
         report.generate_report(output_directory, for_new_data=args.new_data)
     finally:

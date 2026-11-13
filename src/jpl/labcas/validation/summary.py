@@ -135,7 +135,7 @@ def _summarize_collection(collection_directory: str):
             for row in reader:
                 if not row or row[0] == 'Site ID':
                     continue
-                site, event, file_name, _study_uid, _series_uid, profile, _score, finding, details = row
+                site, event, file_name, _study_uid, _series_uid, profile, _score, finding, details, *_extra = row
                 unique_file_name = _unique_file_name(site, event, file_name)
                 all_files.add(unique_file_name)
                 issue = _simplify_issue(finding, details)

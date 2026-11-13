@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import ClassVar, Optional
 from abc import ABC, abstractmethod
 from collections import defaultdict
-import pydicom, argparse, logging, re, csv, os.path, sqlite3
+import json, pydicom, argparse, logging, re, csv, os.path, sqlite3
 from pydicom.tag import Tag
 from pydicom import datadict
 
@@ -91,6 +91,7 @@ class Report:
     def __init__(
         self, findings: Optional[list[Finding]] = None, score: float = 1.0, db_path: Optional[str] = None,
         event_id_column_name: str = 'Event ID',
+        extra_reporting_column_names: Optional[list[str]] = None,
     ):
         '''Initialize the report with the given findings or database path.
         
@@ -102,6 +103,8 @@ class Report:
             db_path: Optional path to SQLite database containing findings (preferred for memory efficiency)
             event_id_column_name: Header label for the Event ID column (may be overridden to reflect a
                 DICOM tag name when the caller replaced the event ID with a tag's value)
+            extra_reporting_column_names: Optional right-side CSV column headers for extra DICOM tag
+                values requested via ``--extra-reporting-column``
         '''
         if db_path and findings:
             raise ValueError('Cannot specify both findings list and database path')
@@ -112,6 +115,19 @@ class Report:
         self.db_path = db_path
         self.score = score
         self.event_id_column_name = event_id_column_name
+        self.extra_reporting_column_names = list(extra_reporting_column_names or [])
+
+    def _pad_extra_reporting_values(self, values: Optional[list[str]]) -> list[str]:
+        '''Return one cell per requested extra column, padding or trimming as needed.'''
+        expected = len(self.extra_reporting_column_names)
+        if expected == 0:
+            return []
+        values = list(values or [])
+        if len(values) < expected:
+            values.extend([''] * (expected - len(values)))
+        elif len(values) > expected:
+            values = values[:expected]
+        return values
 
     def _get_finding_kind(self, finding_type: str) -> str:
         '''Get the kind string for a finding type.'''
@@ -179,6 +195,7 @@ class Report:
         _header = [
             'Site ID', self.event_id_column_name, 'File Path', 'Study Instance UID', 'Series Instance UID',
             'Profile', 'Score', 'Findings', 'Details',
+            *self.extra_reporting_column_names,
         ]
 
         if self.db_path:
@@ -203,7 +220,7 @@ class Report:
                     cursor = conn.execute('''
                         SELECT event_id, file_path, file_name, profile_name, study_instance_uid,
                                series_instance_uid, finding_type, value, score, tag, description,
-                               pattern, index_val
+                               pattern, index_val, extra_reporting_values
                         FROM findings
                         WHERE site_id = ? AND (finding_type IN ('WarningFinding', 'ErrorFinding') OR score >= ?)
                         ORDER BY event_id, file_path, finding_type, score DESC
@@ -215,12 +232,22 @@ class Report:
                     )
                     for row in cursor:
                         (event_id, file_path, file_name, profile_name, study_uid, series_uid,
-                         finding_type, value, score, tag, description, pattern, index_val) = row
+                         finding_type, value, score, tag, description, pattern, index_val,
+                         extra_reporting_values_json) = row
                         file_entry = event_file_findings[event_id][file_path]
                         if 'findings_by_type' not in file_entry:
                             file_entry['profile_name'] = profile_name or 'Unknown'
                             file_entry['study_instance_uid'] = study_uid or ''
                             file_entry['series_instance_uid'] = series_uid or ''
+                            try:
+                                extra_values = json.loads(extra_reporting_values_json or '[]')
+                            except (TypeError, json.JSONDecodeError):
+                                extra_values = []
+                            if not isinstance(extra_values, list):
+                                extra_values = []
+                            file_entry['extra_reporting_values'] = self._pad_extra_reporting_values(
+                                [str(v) if v is not None else '' for v in extra_values]
+                            )
                             file_entry['findings_by_type'] = defaultdict(list)
                         file_entry['findings_by_type'][finding_type].append({
                             'value': value,
@@ -245,6 +272,7 @@ class Report:
                                 profile_name = file_entry['profile_name']
                                 study_uid = file_entry['study_instance_uid']
                                 series_uid = file_entry['series_instance_uid']
+                                extra_values = file_entry.get('extra_reporting_values', [])
                                 finding_types = file_entry['findings_by_type']
                                 kinds = sorted(finding_types.keys())
                                 
@@ -273,6 +301,7 @@ class Report:
                                             finding_data['score'],
                                             kind,
                                             details,
+                                            *extra_values,
                                         ])
             finally:
                 _logger.info('Closing database connection')
@@ -307,11 +336,15 @@ class Report:
                                     profile_name = potential_file.report_profile_name or 'Unknown'
                                     study_uid = potential_file.study_instance_uid
                                     series_uid = potential_file.series_instance_uid
+                                    extra_values = self._pad_extra_reporting_values(
+                                        potential_file.extra_reporting_values
+                                    )
                                     for finding in scored_findings:
                                         score, details = finding.score, ", ".join(finding.report())
                                         writer.writerow([
                                             site_id, event_id, file_name, study_uid, series_uid,
                                             profile_name, score, kind, details,
+                                            *extra_values,
                                         ])
         _logger.info('Finished generating CSV reports')
 

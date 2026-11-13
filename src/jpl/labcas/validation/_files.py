@@ -24,12 +24,22 @@ class PotentialFile:
     # Regex for parsing organization parts from file paths
     _organization_re = re.compile(r'([^/]+)/(\d{7})/(.+)$')  # blah/blah/Images_site_XYX/1234567/f1/f2/…/file.dcm
 
-    def __init__(self, path: str, site_id: str = None, event_id: str = None, event_id_tag: BaseTag | None = None):
+    def __init__(
+        self,
+        path: str,
+        site_id: str = None,
+        event_id: str = None,
+        event_id_tag: BaseTag | None = None,
+        extra_reporting_tags: list[BaseTag] | None = None,
+    ):
         '''Initialize the potential file with the given file path and optional site and event IDs.
 
         If `event_id_tag` is given, the Event ID column will instead be populated (once the DICOM
         header is read) with the value of that DICOM tag, taking precedence over both the path-derived
         and any explicitly given `event_id`.
+
+        If `extra_reporting_tags` is given, those DICOM tag values are cached (once the header is read)
+        for appending as right-side columns in the CSV report.
         '''
         self.path = path
         self.file_size = os.path.getsize(path)
@@ -43,12 +53,14 @@ class PotentialFile:
         if site_id: self.site_id = site_id
         if event_id: self.event_id = event_id
         self._event_id_tag = event_id_tag
+        self._extra_reporting_tags = list(extra_reporting_tags) if extra_reporting_tags else []
 
         # Cached DICOM header metadata (populated on first header read during scan)
         self.sop_class_uid: str = ''
         self.study_instance_uid: str = ''
         self.series_instance_uid: str = ''
         self.report_profile_name: str = ''
+        self.extra_reporting_values: list[str] = []
         self._header_loaded: bool = False
         self._dicom_readable: bool | None = None
 
@@ -61,6 +73,19 @@ class PotentialFile:
         value = extract(ds, tag_name) or ''
         if isinstance(value, list):
             value = value[0] if value else ''
+        return str(value).strip('\x00').strip()
+
+    @staticmethod
+    def _reporting_tag_value(ds: pydicom.Dataset, tag: BaseTag, extract) -> str:
+        '''Return a string value suitable for an extra reporting column.
+
+        Multi-value tags are joined with ``\\``. Missing tags yield an empty string.
+        '''
+        value = extract(ds, tag)
+        if value is None:
+            return ''
+        if isinstance(value, list):
+            return '\\'.join(str(v).strip('\x00').strip() for v in value)
         return str(value).strip('\x00').strip()
 
     def _load_header_metadata(self, for_new_data: bool = False) -> None:
@@ -77,6 +102,11 @@ class PotentialFile:
                 if self._event_id_tag is not None:
                     replacement = self._scalar_tag_value(ds, self._event_id_tag, self._safely_extract_value_for_tag)
                     self.event_id = replacement if replacement else '«unknown event»'
+                if self._extra_reporting_tags:
+                    self.extra_reporting_values = [
+                        self._reporting_tag_value(ds, tag, self._safely_extract_value_for_tag)
+                        for tag in self._extra_reporting_tags
+                    ]
                 self._header_loaded = True
                 self._dicom_readable = True
             if for_new_data not in self._profile_names:
